@@ -1,0 +1,21 @@
+-- Default page metadata for the SAP master-data pages. All statements are idempotent.
+INSERT INTO sys_menu_field (menu_code,field_code,field_path,label_zh,label_en,label_ar,field_type,visible_list,visible_detail,queryable,default_visible,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'products',N'code',N'code',N'编码',N'Code',N'الكود',N'TEXT',1,1,1,1,10,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_field WHERE menu_code=N'products' AND field_code=N'code');
+INSERT INTO sys_menu_field (menu_code,field_code,field_path,label_zh,label_en,label_ar,field_type,visible_list,visible_detail,queryable,default_visible,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'products',N'name',N'nameZh',N'名称',N'Name',N'الاسم',N'TEXT',1,1,1,1,20,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_field WHERE menu_code=N'products' AND field_code=N'name');
+INSERT INTO sys_menu_field (menu_code,field_code,field_path,label_zh,label_en,label_ar,field_type,visible_list,visible_detail,queryable,default_visible,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'products',N'specification',N'specification',N'规格',N'Specification',N'المواصفة',N'TEXT',1,1,0,1,30,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_field WHERE menu_code=N'products' AND field_code=N'specification');
+INSERT INTO sys_menu_field (menu_code,field_code,field_path,label_zh,label_en,label_ar,field_type,visible_list,visible_detail,queryable,default_visible,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'products',N'productModel',N'productModel',N'型号',N'Model',N'الموديل',N'TEXT',1,1,0,1,40,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_field WHERE menu_code=N'products' AND field_code=N'productModel');
+INSERT INTO sys_menu_field (menu_code,field_code,field_path,label_zh,label_en,label_ar,field_type,visible_list,visible_detail,queryable,default_visible,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'products',N'customerPartNumber',N'customerPartNumber',N'客户零件号',N'Customer part no.',N'رقم قطعة العميل',N'TEXT',1,1,1,1,50,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_field WHERE menu_code=N'products' AND field_code=N'customerPartNumber');
+
+INSERT INTO sys_menu_action (menu_code,action_code,name_zh,name_en,name_ar,action_type,permission_code,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'products',N'PRODUCT_SYNC',N'同步产品',N'Sync product',N'مزامنة المنتج',N'BUTTON',N'PRODUCT_SYNC',10,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_action WHERE menu_code=N'products' AND action_code=N'PRODUCT_SYNC');
+INSERT INTO sys_menu_action (menu_code,action_code,name_zh,name_en,name_ar,action_type,permission_code,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'products',N'PRODUCT_DETAIL',N'查看详情',N'View details',N'عرض التفاصيل',N'BUTTON',N'ENGINEERING_READ',20,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_action WHERE menu_code=N'products' AND action_code=N'PRODUCT_DETAIL');
+
+INSERT INTO sys_menu_action (menu_code,action_code,name_zh,name_en,name_ar,action_type,permission_code,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'orders',N'WORK_ORDER_SYNC',N'同步工单',N'Sync work order',N'مزامنة أمر العمل',N'BUTTON',N'WORK_ORDER_SYNC',10,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_action WHERE menu_code=N'orders' AND action_code=N'WORK_ORDER_SYNC');
+INSERT INTO sys_menu_action (menu_code,action_code,name_zh,name_en,name_ar,action_type,permission_code,sort_order,status,created_at,updated_at,created_by,updated_by,version)
+SELECT N'orders',N'WORK_ORDER_DETAIL',N'查看详情',N'View details',N'عرض التفاصيل',N'BUTTON',N'WORK_ORDER_READ',20,N'ACTIVE',GETDATE(),GETDATE(),N'system',N'system',0 WHERE NOT EXISTS (SELECT 1 FROM sys_menu_action WHERE menu_code=N'orders' AND action_code=N'WORK_ORDER_DETAIL');

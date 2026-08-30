@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary brand - Purple #7C3AED (matches web UI) -->
+    <color name="purple_primary">#7C3AED</color>
+    <color name="purple_primary_dark">#5B21B6</color>
+    <color name="purple_primary_light">#A78BFA</color>
+    <color name="purple_on_primary">#FFFFFF</color>
+    <color name="purple_container">#EDE9FE</color>
+    <color name="purple_on_container">#3B0764</color>
+
+    <!-- Secondary / accent -->
+    <color name="secondary">#8B5CF6</color>
+    <color name="secondary_container">#F3E8FF</color>
+
+    <!-- Backgrounds & surfaces -->
+    <color name="bg_window">#F3F4F6</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="surface_variant">#F9FAFB</color>
+
+    <!-- Text -->
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="text_disabled">#9CA3AF</color>
+
+    <!-- States -->
+    <color name="success">#10B981</color>
+    <color name="success_container">#D1FAE5</color>
+    <color name="error">#EF4444</color>
+    <color name="error_container">#FEE2E2</color>
+    <color name="warning">#F59E0B</color>
+    <color name="warning_container">#FEF3C7</color>
+
+    <!-- Black & white -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+
+    <!-- Dividers -->
+    <color name="divider">#E5E7EB</color>
+</resources>

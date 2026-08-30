@@ -1,0 +1,150 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /tns-mes
+spring:
+  application:
+    name: tns-mes-server
+  profiles:
+    active: local
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: UTC
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      timeout: 1500ms
+      repositories:
+        enabled: false
+  messages:
+    basename: messages/messages
+    encoding: UTF-8
+mes:
+  bootstrap:
+    enabled: ${MES_BOOTSTRAP_ENABLED:false}
+    admin-password: ${MES_BOOTSTRAP_ADMIN_PASSWORD:}
+  security:
+    jwt-secret: ${MES_JWT_SECRET:change-this-secret-to-a-32-byte-value}
+    token-validity-seconds: 28800
+  idempotency:
+    ttl-seconds: 86400
+  rate-limit:
+    requests-per-minute: 120
+  integration:
+    http:
+      connect-timeout-ms: ${MES_INTEGRATION_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${MES_INTEGRATION_READ_TIMEOUT_MS:30000}
+    sap:
+      enabled: ${MES_SAP_ENABLED:true}
+      schedule-enabled: ${MES_SAP_SCHEDULE_ENABLED:false}
+      schedule:
+        initial-delay-ms: ${MES_SAP_SYNC_INITIAL_DELAY_MS:60000}
+        fixed-delay-ms: ${MES_SAP_SYNC_FIXED_DELAY_MS:900000}
+      base-url: ${MES_SAP_BASE_URL:https://my200683.s4hana.sapcloud.cn}
+      product-path: ${MES_SAP_PRODUCT_PATH:/sap/opu/odata/sap/API_PRODUCT_SRV/A_Product}
+      work-order-path: ${MES_SAP_WORK_ORDER_PATH:/sap/opu/odata/sap/API_PRODUCTION_ORDER_2_SRV/A_ProductionOrder_2}
+      batch-path: ${MES_SAP_BATCH_PATH:/sap/opu/odata/sap/API_BATCH_SRV/Batch}
+      component-path: ${MES_SAP_COMPONENT_PATH:}
+      operation-path: ${MES_SAP_OPERATION_PATH:/sap/opu/odata/sap/YY1_C_POOPERATIONS_CDS/YY1_C_POOperations}
+      username: ${MES_SAP_USERNAME:MES_T}
+      password: ${MES_SAP_PASSWORD:ooljsMX8dVfMDjjgrdhzzjGwtPyZg$JgEdgXYvWm}
+      bearer-token: ${MES_SAP_BEARER_TOKEN:}
+      page-size: ${MES_SAP_PAGE_SIZE:200}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  jpa:
+    hibernate:
+      ddl-auto: update
+  datasource:
+    url: jdbc:h2:file:./data/tns_mes_local;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  flyway:
+    enabled: false
+management:
+  health:
+    redis:
+      enabled: false
+mes:
+  bootstrap:
+    enabled: true
+    admin-password: admin123
+
+---
+spring:
+  config:
+    activate:
+      on-profile: sqlserver
+  jpa:
+    properties:
+      hibernate:
+        use_nationalized_character_data: true
+  datasource:
+    url: ${MES_DB_URL:jdbc:sqlserver://127.0.0.1:1433;databaseName=tns_mes;encrypt=false;trustServerCertificate=true}
+    username: ${MES_DB_USERNAME:sa}
+    password: ${MES_DB_PASSWORD:}
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    hikari:
+      maximum-pool-size: ${MES_DB_POOL_MAX:30}
+      minimum-idle: ${MES_DB_POOL_MIN:5}
+      connection-timeout: 3000
+  flyway:
+    locations: classpath:db/migration
+
+---
+spring:
+  config:
+    activate:
+      on-profile: sqlserver-local
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        use_nationalized_character_data: true
+  datasource:
+    url: jdbc:sqlserver://localhost;instanceName=BARTENDER;databaseName=tns_mes;integratedSecurity=true;authenticationScheme=NativeAuthentication;encrypt=false;trustServerCertificate=true
+    username:
+    password:
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+  flyway:
+    locations: classpath:db/migration
+management:
+  health:
+    redis:
+      enabled: false
+mes:
+  bootstrap:
+    enabled: true
+    admin-password: ${MES_BOOTSTRAP_ADMIN_PASSWORD:admin123}

@@ -1,0 +1,124 @@
+﻿<!doctype html>
+<html lang="zh-CN" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#7C3AED">
+  <title>TNS MES</title>
+  <link rel="stylesheet" href="/tns-mes/app.css">
+</head>
+<body>
+  <div id="app">
+    <section id="login-view" class="login-view">
+      <div class="login-brand">
+        <div class="brand-lockup"><span class="brand-mark">T</span><span>TAIKING MES</span></div>
+        <div class="login-copy">
+          <span class="eyebrow" data-i18n="platform">集团制造运营平台</span>
+          <h1 data-i18n="loginTitle">统一主数据、工程准备与生产执行</h1>
+          <p data-i18n="loginSubtitle">面向突尼斯工厂的标准化制造执行工作台</p>
+        </div>
+        <div class="login-status"><span class="status-dot"></span><span>SQL Server · Tunis Plant</span></div>
+      </div>
+      <div class="login-panel">
+        <div class="language-switcher">
+          <button type="button" data-lang="zh-CN">中文</button>
+          <button type="button" data-lang="en">EN</button>
+          <button type="button" data-lang="ar-TN">العربية</button>
+        </div>
+        <form id="login-form" class="login-card">
+          <div class="login-heading">
+            <span class="mobile-brand">TAIKING MES</span>
+            <h2 data-i18n="signIn">登录工作台</h2>
+            <p data-i18n="signInHint">使用 MES 账号继续</p>
+          </div>
+          <label><span data-i18n="username">用户名</span><input id="username" autocomplete="username" value="admin" required></label>
+          <label><span data-i18n="password">密码</span><input id="password" type="password" autocomplete="current-password" value="admin123" required></label>
+          <button class="btn primary full" type="submit"><i data-lucide="log-in"></i><span data-i18n="signIn">登录工作台</span></button>
+          <div id="login-error" class="form-error" role="alert"></div>
+        </form>
+      </div>
+    </section>
+
+    <section id="workspace-view" class="workspace hidden">
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+          <div class="brand-lockup"><span class="brand-mark">T</span><span class="brand-name">TAIKING MES</span></div>
+          <button id="sidebar-collapse" class="icon-btn" type="button" title="Collapse"><i data-lucide="panel-left-close"></i></button>
+        </div>
+        <div class="plant-select">
+          <span class="plant-icon"><i data-lucide="factory"></i></span>
+          <span class="plant-copy"><small data-i18n="currentSite">当前站点</small><strong>Tunis Plant</strong></span>
+          <span class="online-dot"></span>
+        </div>
+        <div class="nav-search">
+          <i data-lucide="search"></i>
+          <input id="nav-search" data-i18n-placeholder="searchMenu" placeholder="搜索菜单">
+        </div>
+        <nav id="main-nav" class="main-nav">
+          <button class="nav-link" data-view="overview" data-permission="PAGE_OVERVIEW"><i data-lucide="layout-dashboard"></i><span data-i18n="overview">运营总览</span></button>
+
+          <div class="nav-group" data-group="foundation">
+            <button class="nav-group-toggle" type="button"><i data-lucide="database"></i><span data-i18n="foundation">基础与组织</span><i class="chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-children">
+              <button class="nav-link" data-view="master" data-permission="PAGE_MASTER_DATA"><i data-lucide="building-2"></i><span data-i18n="masterData">基础资料</span></button>
+              <button class="nav-link" data-view="iam" data-permission="PAGE_IAM"><i data-lucide="shield-check"></i><span data-i18n="iam">用户与权限</span></button>
+              <button class="nav-link" data-view="menus" data-permission="PAGE_IAM"><i data-lucide="menu-square"></i><span data-i18n="menuManagement">菜单管理</span></button>
+              <button class="nav-link" data-view="dictionaries" data-permission="PAGE_IAM"><i data-lucide="book-open-text"></i><span data-i18n="dataDictionary">数据字典</span></button>
+            </div>
+          </div>
+
+          <div class="nav-group" data-group="engineering">
+            <button class="nav-group-toggle" type="button"><i data-lucide="boxes"></i><span data-i18n="engineering">产品工程</span><i class="chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-children">
+              <button class="nav-link" data-view="products" data-permission="PAGE_PRODUCT"><i data-lucide="package-search"></i><span data-i18n="products">产品主数据</span></button>
+              <button class="nav-link" data-view="boms" data-permission="PAGE_BOM"><i data-lucide="network"></i><span>BOM</span></button>
+              <button class="nav-link" data-view="routes" data-permission="PAGE_ROUTE"><i data-lucide="route"></i><span data-i18n="routes">工艺路线</span></button>
+              <button class="nav-link" data-view="quality" data-permission="PAGE_QUALITY"><i data-lucide="clipboard-check"></i><span data-i18n="quality">检验规则</span></button>
+              <button class="nav-link" data-view="batches" data-permission="PAGE_BATCH"><i data-lucide="boxes"></i><span data-i18n="batches">批次管理</span></button>
+            </div>
+          </div>
+
+          <div class="nav-group" data-group="production">
+            <button class="nav-group-toggle" type="button"><i data-lucide="activity"></i><span data-i18n="production">生产执行</span><i class="chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-children">
+              <button class="nav-link" data-view="orders" data-permission="PAGE_WORK_ORDER"><i data-lucide="list-checks"></i><span data-i18n="workOrders">生产工单</span></button>
+            </div>
+          </div>
+
+          <div class="nav-group" data-group="integration">
+            <button class="nav-group-toggle" type="button"><i data-lucide="plug-zap"></i><span data-i18n="integrationCenter">集成中心</span><i class="chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-children">
+              <button class="nav-link" data-view="apiLogs" data-permission="PAGE_INTEGRATION"><i data-lucide="file-text"></i><span data-i18n="apiLogs">接口调用日志</span></button>
+              <button class="nav-link" data-view="jobs" data-permission="PAGE_SYNC_JOB"><i data-lucide="calendar-clock"></i><span data-i18n="scheduledJobs">定时任务</span></button>
+            </div>
+          </div>
+        </nav>
+        <div class="sidebar-footer">
+          <button id="logout" class="nav-link logout" type="button" data-action="logout"><i data-lucide="log-out"></i><span data-i18n="logout">退出登录</span></button>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button id="mobile-menu" class="icon-btn mobile-only" type="button"><i data-lucide="menu"></i></button>
+            <div class="breadcrumb"><span>TNS MES</span><i data-lucide="chevron-right"></i><strong id="current-title"></strong></div>
+          </div>
+          <div class="topbar-actions">
+            <button id="global-refresh" class="icon-btn" type="button" data-tooltip="refresh"><i data-lucide="refresh-cw"></i></button>
+            <div class="language-switcher compact">
+              <button type="button" data-lang="zh-CN">中文</button><button type="button" data-lang="en">EN</button><button type="button" data-lang="ar-TN">العربية</button>
+            </div>
+            <div class="user-block"><span id="avatar" class="avatar">A</span><span><strong id="user-name">admin</strong><small id="user-role">MES Administrator</small></span></div>
+          </div>
+        </header>
+        <div id="page" class="page"></div>
+      </main>
+    </section>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+  <div id="overlay-root"></div>
+  <script src="/tns-mes/vendor/lucide.min.js"></script>
+  <script type="module" src="/tns-mes/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+ALTER TABLE eng_product ADD
+    source NVARCHAR(30) NOT NULL CONSTRAINT df_eng_product_source DEFAULT 'SAP',
+    product_old_id NVARCHAR(64),
+    product_group NVARCHAR(64),
+    gross_weight DECIMAL(18,6),
+    net_weight DECIMAL(18,6),
+    weight_unit NVARCHAR(20),
+    country_of_origin NVARCHAR(8),
+    product_hierarchy NVARCHAR(64),
+    division_code NVARCHAR(20),
+    manufacturer_number NVARCHAR(64),
+    manufacturer_part_number NVARCHAR(100),
+    material_revision_level NVARCHAR(40),
+    serial_number_profile NVARCHAR(40),
+    batch_managed BIT NOT NULL CONSTRAINT df_eng_product_batch_managed DEFAULT 0,
+    marked_for_deletion BIT NOT NULL CONSTRAINT df_eng_product_deleted DEFAULT 0,
+    brand NVARCHAR(100),
+    color NVARCHAR(100),
+    customer_part_number NVARCHAR(100),
+    product_model NVARCHAR(100),
+    drawing_number NVARCHAR(100),
+    sap_created_at DATETIME2,
+    sap_changed_at DATETIME2,
+    sap_last_sync_at DATETIME2,
+    sap_payload NVARCHAR(MAX);
+
+ALTER TABLE prd_work_order ADD
+    order_category NVARCHAR(20),
+    order_type NVARCHAR(20),
+    production_plant NVARCHAR(20),
+    plant NVARCHAR(20),
+    storage_location NVARCHAR(20),
+    mrp_area NVARCHAR(20),
+    mrp_controller NVARCHAR(20),
+    production_supervisor NVARCHAR(20),
+    production_version NVARCHAR(40),
+    planned_order NVARCHAR(64),
+    sales_order NVARCHAR(64),
+    sales_order_item NVARCHAR(20),
+    company_code NVARCHAR(20),
+    profit_center NVARCHAR(40),
+    scheduled_start DATETIME2,
+    scheduled_end DATETIME2,
+    actual_release_date DATE,
+    production_unit NVARCHAR(20),
+    planned_scrap_quantity DECIMAL(18,6),
+    confirmed_yield_quantity DECIMAL(18,6),
+    order_long_text NVARCHAR(2000),
+    locked BIT NOT NULL CONSTRAINT df_prd_wo_locked DEFAULT 0,
+    marked_for_deletion BIT NOT NULL CONSTRAINT df_prd_wo_deleted DEFAULT 0,
+    sap_created_at DATETIME2,
+    sap_changed_at DATETIME2,
+    sap_last_sync_at DATETIME2,
+    sap_payload NVARCHAR(MAX);
+
+ALTER TABLE eng_bom_item ADD
+    reservation_no NVARCHAR(40),
+    reservation_item NVARCHAR(20),
+    operation_code NVARCHAR(40),
+    material_group NVARCHAR(40),
+    requirement_date DATE,
+    withdrawn_quantity DECIMAL(18,6),
+    available_quantity DECIMAL(18,6),
+    storage_location NVARCHAR(20),
+    goods_movement_type NVARCHAR(20),
+    bom_item_number NVARCHAR(20),
+    item_description NVARCHAR(500),
+    is_bulk_material BIT NOT NULL CONSTRAINT df_bom_item_bulk DEFAULT 0,
+    is_backflush BIT NOT NULL CONSTRAINT df_bom_item_backflush DEFAULT 0,
+    is_deleted BIT NOT NULL CONSTRAINT df_bom_item_deleted DEFAULT 0,
+    sap_payload NVARCHAR(MAX);
+
+ALTER TABLE eng_process_operation ADD
+    plant NVARCHAR(20),
+    work_center_code NVARCHAR(40),
+    work_center_internal_id NVARCHAR(40),
+    control_profile NVARCHAR(40),
+    operation_unit NVARCHAR(20),
+    planned_total_quantity DECIMAL(18,6),
+    planned_yield_quantity DECIMAL(18,6),
+    planned_scrap_quantity DECIMAL(18,6),
+    confirmed_yield_quantity DECIMAL(18,6),
+    confirmed_scrap_quantity DECIMAL(18,6),
+    earliest_start DATETIME2,
+    earliest_end DATETIME2,
+    latest_start DATETIME2,
+    latest_end DATETIME2,
+    sap_payload NVARCHAR(MAX);
+
+ALTER TABLE iam_permission ADD
+    permission_type NVARCHAR(20) NOT NULL CONSTRAINT df_iam_permission_type DEFAULT 'ACTION',
+    group_code NVARCHAR(40) NOT NULL CONSTRAINT df_iam_permission_group DEFAULT 'SYSTEM',
+    sort_order INT NOT NULL CONSTRAINT df_iam_permission_sort DEFAULT 0,
+    description NVARCHAR(500);
+
+CREATE TABLE int_sync_job (
+    id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    code NVARCHAR(64) NOT NULL,
+    name_zh NVARCHAR(200) NOT NULL,
+    name_en NVARCHAR(200),
+    name_ar NVARCHAR(200),
+    system_code NVARCHAR(40) NOT NULL,
+    endpoint NVARCHAR(500) NOT NULL,
+    http_method NVARCHAR(10) NOT NULL DEFAULT 'GET',
+    cron_expression NVARCHAR(80) NOT NULL,
+    description NVARCHAR(1000),
+    enabled BIT NOT NULL DEFAULT 0,
+    status NVARCHAR(20) NOT NULL DEFAULT 'IDLE',
+    last_run_at DATETIME2,
+    next_run_at DATETIME2,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME2 NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME2 NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by NVARCHAR(64),
+    updated_by NVARCHAR(64),
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT uk_int_sync_job_code UNIQUE (code)
+);
+
+CREATE TABLE int_sync_run (
+    id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    job_id BIGINT NOT NULL,
+    trigger_type NVARCHAR(20) NOT NULL,
+    status NVARCHAR(20) NOT NULL,
+    endpoint NVARCHAR(500) NOT NULL,
+    http_method NVARCHAR(10) NOT NULL,
+    started_at DATETIME2 NOT NULL,
+    finished_at DATETIME2,
+    received_count INT NOT NULL DEFAULT 0,
+    created_count INT NOT NULL DEFAULT 0,
+    updated_count INT NOT NULL DEFAULT 0,
+    failed_count INT NOT NULL DEFAULT 0,
+    error_summary NVARCHAR(2000),
+    created_at DATETIME2 NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_int_sync_run_job FOREIGN KEY (job_id) REFERENCES int_sync_job(id)
+);
+
+CREATE INDEX ix_int_sync_job_enabled_next ON int_sync_job(enabled, next_run_at);
+CREATE INDEX ix_int_sync_run_job_started ON int_sync_run(job_id, started_at DESC);
+CREATE INDEX ix_eng_product_source_status ON eng_product(source, status);
+CREATE INDEX ix_prd_work_order_plant_status ON prd_work_order(production_plant, status, planned_start);

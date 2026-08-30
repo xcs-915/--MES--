@@ -1,0 +1,48 @@
+# ===== Java / Maven =====
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+hs_err_pid*
+
+# ===== IDE =====
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*~
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Database =====
+*.mv.db
+*.trace.db
+data/
+
+# ===== Build tools =====
+tools/mssql-jdbc-auth/extracted/
+
+# ===== Node / npm (if frontend build tools added) =====
+node_modules/
+dist/frontend/src/
+
+# ===== Android (future) =====
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+.gradle/
+build/
+captures/
+
+# ===== Secrets / Config =====
+application-prod.yml
+*.env

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TNS-MES</string>
+    <string name="app_subtitle">制造执行系统</string>
+
+    <!-- Login -->
+    <string name="login_welcome">欢迎登录</string>
+    <string name="login_subtitle">TNS 制造执行系统</string>
+    <string name="hint_username">用户名</string>
+    <string name="hint_password">密码</string>
+    <string name="action_login">登 录</string>
+    <string name="login_loading">正在登录…</string>
+    <string name="err_username_required">请输入用户名</string>
+    <string name="err_password_required">请输入密码</string>
+    <string name="err_login_failed">登录失败：%1$s</string>
+    <string name="err_network">网络连接失败，请检查网络设置</string>
+
+    <!-- Scanning -->
+    <string name="title_scanning">上料</string>
+    <string name="subtitle_scanning">扫描工单与物料标签</string>
+    <string name="card_work_order">扫描工单</string>
+    <string name="card_work_order_desc">扫描或输入工单编号</string>
+    <string name="hint_work_order">工单编号</string>
+    <string name="card_material_label">扫描物料标签</string>
+    <string name="card_material_label_desc">扫描或输入物料标签条码</string>
+    <string name="hint_material_label">物料标签</string>
+    <string name="action_scan">扫描</string>
+    <string name="action_submit">确认上料</string>
+    <string name="submit_loading">正在校验…</string>
+    <string name="status_ready">请扫描工单与物料标签后确认上料</string>
+    <string name="status_success">上料成功</string>
+    <string name="status_failed">上料失败：%1$s</string>
+    <string name="err_work_order_required">请扫描工单编号</string>
+    <string name="err_material_required">请扫描物料标签</string>
+    <string name="scan_hint">使用扫码枪扫描或手动输入</string>
+    <string name="action_logout">退出登录</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_back">返回</string>
+    <string name="cd_logout">退出登录</string>
+    <string name="cd_scan_work_order">扫描工单</string>
+    <string name="cd_scan_material">扫描物料</string>
+</resources>
