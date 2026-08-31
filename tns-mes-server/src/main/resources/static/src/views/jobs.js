@@ -42,7 +42,7 @@ export async function loadJobs() {
     state.data.jobs = items;
     node.innerHTML = items.length ? dataTable(
       [t('jobCode'), t('name'), t('system'), t('cron'), t('endpoint'), t('status'), t('lastRun'), t('nextRun'), t('actions')],
-      items.map(v => `<tr><td class="code">${escVal(v.code)}</td><td><span class="cell-title">${escVal(v.nameZh)}</span><span class="cell-sub">${escVal(v.nameEn || v.nameAr)}</span></td><td>${escVal(v.systemCode)}</td><td class="code">${escVal(v.cronExpression)}</td><td class="code">${escVal(v.endpoint)}</td><td>${statusPill(v.status)}</td><td>${formatDate(v.lastRunAt)}</td><td>${formatDate(v.nextRunAt)}</td><td class="table-actions">${btn('job-detail', icon('eye'), 'ghost')} ${btn('job-run', icon('play'), 'ghost', 'INTEGRATION_WRITE')} ${btn('job-toggle', icon(v.enabled ? 'pause' : 'play'), 'ghost', 'INTEGRATION_WRITE')}</td></tr>`)
+      items.map(v => `<tr><td class="code">${escVal(v.code)}</td><td><span class="cell-title">${escVal(localizedMeta(v, 'name'))}</span><span class="cell-sub">${escVal(v.nameZh || v.nameEn || v.nameAr)}</span></td><td>${escVal(v.systemCode)}</td><td class="code">${escVal(v.cronExpression)}</td><td class="code">${escVal(v.endpoint)}</td><td>${statusPill(v.status)}</td><td>${formatDate(v.lastRunAt)}</td><td>${formatDate(v.nextRunAt)}</td><td class="table-actions">${btn('job-detail', icon('eye'), 'ghost')} ${btn('job-run', icon('play'), 'ghost', 'INTEGRATION_WRITE')} ${btn('job-toggle', icon(v.enabled ? 'pause' : 'play'), 'ghost', 'INTEGRATION_WRITE')}</td></tr>`)
     ) : emptyState();
   } catch (e) {
     node.innerHTML = emptyState(e.message);

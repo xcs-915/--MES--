@@ -20,11 +20,7 @@ export function renderOrders() {
     filterField('order-search', t('search'), 'text', null, t('orderNo') + '/' + t('product')),
     filterField('order-status', t('status'), 'select', [
       { value: 'all', label: t('all') },
-      { value: 'DRAFT', label: 'DRAFT' },
-      { value: 'RELEASED', label: 'RELEASED' },
-      { value: 'IN_PROGRESS', label: 'IN_PROGRESS' },
-      { value: 'COMPLETED', label: 'COMPLETED' },
-      { value: 'CANCELLED', label: 'CANCELLED' }
+      ...['DRAFT','RELEASED','IN_PROGRESS','COMPLETED','CANCELLED'].map(value => ({ value, label: t('status.' + value) }))
     ]),
     filterField('order-plant', t('plant'), 'text', null, t('plant'))
   ];
@@ -111,7 +107,7 @@ export async function loadOrders(page) {
 
     const rows = sorted.map(v => `<tr data-id="${esc(v.id)}">
       <td class="code">${escVal(v.orderNo)}</td>
-      <td><span class="cell-title">${escVal(v.productCode)}</span><span class="cell-sub">${escVal(v.productNameZh || v.productNameEn || v.productNameAr)}</span></td>
+      <td><span class="cell-title">${escVal(v.productCode)}</span><span class="cell-sub">${escVal(state.lang === 'ar-TN' ? (v.productNameAr || v.productNameEn || v.productNameZh) : state.lang === 'en' ? (v.productNameEn || v.productNameZh) : (v.productNameZh || v.productNameEn || v.productNameAr))}</span></td>
       <td>${escVal(v.orderType)}</td>
       <td>${escVal(v.productionPlant || v.plant)}</td>
       <td>${escVal(v.quantity)} ${escVal(v.productionUnit)}</td>

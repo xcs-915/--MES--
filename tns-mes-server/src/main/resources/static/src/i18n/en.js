@@ -7,6 +7,7 @@ export default {
   production:'Production execution', workOrders:'Production orders', integrationCenter:'Integration', manualSync:'Interface sync', scheduledJobs:'Scheduled jobs', apiLogs:'API call logs',
   logout:'Sign out', search:'Search code, name or keyword', searchMenu:'Search menu',
   query:'Search', refresh:'Refresh', reset:'Reset', details:'Details', actions:'Actions', status:'Status', source:'Source', lastSync:'Last sync',
+  masterTypeEnterprise:'Enterprise', masterTypeFactory:'Factory', masterTypeWorkshop:'Workshop', masterTypeDepartment:'Department', masterTypeWarehouse:'Warehouse', masterTypeWorkCenter:'Work center', masterTypeProductionLine:'Production line', masterTypeWorkstation:'Workstation', masterTypePerson:'Person', masterTypePosition:'Position', masterTypeCustomer:'Customer', masterTypeSupplier:'Supplier', masterTypeManufacturer:'Manufacturer',
   noData:'No data', all:'All', enabled:'Enabled', disabled:'Disabled', run:'Run now', save:'Save', cancel:'Cancel',
   add:'Add', edit:'Edit', delete:'Delete', confirmDelete:'Confirm delete?',
   product:'Product', code:'Code', name:'Name', type:'Type', unit:'Unit', specification:'Specification', productGroup:'Product group',
@@ -61,6 +62,7 @@ export default {
   'status.ENABLED':'Enabled', 'status.DISABLED':'Disabled', 'status.PARTIAL':'Partial',
   'status.UNREST':'Unrestricted', 'status.RESTRICTED':'Restricted',
   // Interface management
+  systemName:'System', duration:'Duration', error:'Error', requestParams:'Request parameters', requestBody:'Request body', response:'Response', apiLog:'API log',
   interfaceManagement:'Interface Management', interfaceManagementSubtitle:'Unified management of multi-system interface categories, external systems and interface definitions.',
   interfaceCategory:'Interface Category', externalSystem:'External System', interfaceDefinition:'Interface Definition',
   syncDirection:'Sync Direction', authType:'Auth Type', dirInbound:'Inbound (Pull)', dirOutbound:'Outbound (Push)', dirBidirectional:'Bidirectional'

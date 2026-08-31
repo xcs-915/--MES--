@@ -4,8 +4,8 @@ target/
 *.jar
 *.war
 *.ear
-*.log
 hs_err_pid*
+*.log
 
 # ===== IDE =====
 .idea/
@@ -13,6 +13,9 @@ hs_err_pid*
 *.ipr
 *.iws
 .vscode/
+.settings/
+.project
+.classpath
 *.swp
 *~
 
@@ -27,13 +30,18 @@ desktop.ini
 data/
 
 # ===== Build tools =====
+bin/
 tools/mssql-jdbc-auth/extracted/
 
-# ===== Node / npm (if frontend build tools added) =====
+# ===== TRAE internal =====
+.trae-html-share-packages/
+.trae/
+
+# ===== Node / npm =====
 node_modules/
 dist/frontend/src/
 
-# ===== Android (future) =====
+# ===== Android =====
 *.apk
 *.aab
 *.ap_
@@ -44,5 +52,10 @@ build/
 captures/
 
 # ===== Secrets / Config =====
-application-prod.yml
+.env
 *.env
+application-local.yml
+application-prod.yml
+
+# Keep Maven POM
+!pom.xml

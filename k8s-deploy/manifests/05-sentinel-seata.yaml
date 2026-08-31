@@ -1,0 +1,292 @@
+# [架构说明] 当前为单体模式: 后端 tns-mes-server (NodePort 31180) 统一提供前端页面与 API, 不再使用 Gateway/微服务/独立前端 Pod
+# ==============================================================================
+# 05-sentinel-seata.yaml
+# TNS-MES Phase 3 高可用部署 - Sentinel Dashboard + Seata TC Server
+# 说明: Sentinel 1.8.6 提供流控规则可视化管理
+#       Seata 1.7.0 提供分布式事务协调, 使用外部 SQL Server 存储事务日志
+# ==============================================================================
+
+---
+# Service: Sentinel Dashboard 客户端访问 (ClusterIP)
+# 用途: 微服务通过 sentinel-dashboard.tns-mes-middleware:8080 推送流控规则
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinel-dashboard
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: sentinel-dashboard
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: flow-control
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sentinel-dashboard
+  ports:
+    - name: dashboard
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+
+---
+# Deployment: Sentinel Dashboard (1 副本)
+# 说明: Sentinel 1.8.6, 提供流控/熔断/系统规则的可视化控制台
+#       微服务客户端通过此 Dashboard 动态推送规则
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel-dashboard
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: sentinel-dashboard
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: flow-control
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sentinel-dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentinel-dashboard
+        app.kubernetes.io/part-of: tns-mes
+        app.kubernetes.io/component: flow-control
+    spec:
+      containers:
+        - name: sentinel-dashboard
+          image: registry.cn-hangzhou.aliyuncs.com/bladex/sentinel-dashboard:1.8.6
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: dashboard
+              containerPort: 8080
+          env:
+            # Sentinel Dashboard 监听端口
+            - name: SERVER_PORT
+              value: "8080"
+            # 控制台登录账号密码
+            - name: SENTINEL_DASHBOARD_USERNAME
+              value: "sentinel"
+            - name: SENTINEL_DASHBOARD_PASSWORD
+              value: "sentinel"
+            # 指定 Dashboard 自身项目名
+            - name: PROJECT_NAME
+              value: "sentinel-dashboard"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          # 就绪探针: Dashboard HTTP 端口可达
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # 存活探针
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+
+---
+# ConfigMap: Seata Server 配置文件
+# 用途: 配置 Seata 注册中心 (Nacos) 和存储模式 (SQL Server 外部数据库)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seata-config
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: seata-server
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: distributed-transaction
+data:
+  # registry.conf: 注册中心与配置中心设置
+  registry.conf: |
+    registry {
+      # 使用 Nacos 作为注册中心, 与 Nacos 集群集成
+      type = "nacos"
+      nacos {
+        application = "seata-server"
+        serverAddr = "nacos-svc.tns-mes-middleware:8848"
+        group = "SEATA_GROUP"
+        namespace = ""
+        cluster = "default"
+        # Nacos 认证 (如启用)
+        username = "nacos"
+        password = "nacos"
+      }
+    }
+    config {
+      # 使用文件配置 (file.conf) 作为配置中心
+      type = "file"
+      file {
+        name = "file:/seata-server/conf/file.conf"
+      }
+    }
+
+  # file.conf: 事务存储模式与数据库配置 (SQL Server 2019)
+  file.conf: |
+    # 事务分组映射 (微服务通过 tns-mes-group 关联 Seata 集群)
+    service {
+      vgroupMapping.tns-mes-group = "default"
+      default.grouplist = "seata-server.tns-mes-middleware:8091"
+      enableDegrade = false
+      disableGlobalTransaction = false
+    }
+    # 事务日志存储: 使用外部 SQL Server 数据库
+    store {
+      mode = "db"
+      db {
+        datasource = "druid"
+        # SQL Server 2019 数据库类型
+        dbType = "sqlserver"
+        driverClassName = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+        url = "jdbc:sqlserver://10.30.10.141:1433;databaseName=seata;encrypt=false;trustServerCertificate=true"
+        user = "tns_mes_user"
+        password = "Taiking@5563"
+        minConn = 5
+        maxConn = 30
+        # 事务存储表 (需提前在 seata 库中创建)
+        globalTable = "global_table"
+        branchTable = "branch_table"
+        lockTable = "lock_table"
+        maxWait = 5000
+      }
+    }
+    # 事务重试与超时配置
+    server {
+      maxCommitRetryTimeout = "-1"
+      maxRollbackRetryTimeout = "-1"
+      rollbackRetryTimeoutUnlockEnable = false
+    }
+    # Metrics 指标暴露 (供 Prometheus 采集)
+    metrics {
+      enabled = true
+      registryType = "compact"
+      exporterType = "prometheus"
+      serverPort = "9878"
+    }
+
+---
+# Service: Seata TC Server 客户端访问 (ClusterIP)
+# 用途: 微服务通过 seata-server.tns-mes-middleware:8091 连接 Seata TC Server
+#       7091 为 Seata 控制台端口
+apiVersion: v1
+kind: Service
+metadata:
+  name: seata-server
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: seata-server
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: distributed-transaction
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: seata-server
+  ports:
+    - name: tc-server
+      port: 8091
+      targetPort: 8091
+      protocol: TCP
+    - name: console
+      port: 7091
+      targetPort: 7091
+      protocol: TCP
+
+---
+# Deployment: Seata TC Server (1 副本)
+# 说明: Seata 1.7.0, 使用 SQL Server 2019 存储全局/分支事务日志
+#       通过 Nacos 注册中心实现服务发现, 微服务按事务分组接入
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seata-server
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: seata-server
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: distributed-transaction
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: seata-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seata-server
+        app.kubernetes.io/part-of: tns-mes
+        app.kubernetes.io/component: distributed-transaction
+    spec:
+      containers:
+        - name: seata-server
+          image: registry.cn-hangzhou.aliyuncs.com/seataio/seata-server:1.7.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            # TC Server 通信端口 (事务协调)
+            - name: tc-server
+              containerPort: 8091
+            # Seata 控制台端口
+            - name: console
+              containerPort: 7091
+          env:
+            # Seata 注册到 Nacos 的应用名
+            - name: SEATA_IP
+              value: "seata-server.tns-mes-middleware"
+            # 指定配置文件路径
+            - name: SEATA_CONFIG_NAME
+              value: "file:/seata-server/conf/registry"
+            # JVM 内存参数
+            - name: JAVA_OPTS
+              value: "-server -Xms256m -Xmx256m -Xmn128m"
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # 挂载自定义配置文件 (registry.conf + file.conf)
+          volumeMounts:
+            - name: seata-config-volume
+              mountPath: /seata-server/conf/registry.conf
+              subPath: registry.conf
+            - name: seata-config-volume
+              mountPath: /seata-server/conf/file.conf
+              subPath: file.conf
+            - name: seata-logs
+              mountPath: /seata-server/logs
+            - name: seata-session
+              mountPath: /seata-server/sessionStore
+          # 就绪探针: TC Server 端口可达
+          readinessProbe:
+            tcpSocket:
+              port: 8091
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # 存活探针
+          livenessProbe:
+            tcpSocket:
+              port: 8091
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+      volumes:
+        - name: seata-config-volume
+          configMap:
+            name: seata-config
+        - name: seata-logs
+          emptyDir: {}
+        - name: seata-session
+          emptyDir: {}

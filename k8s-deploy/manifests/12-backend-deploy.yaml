@@ -1,0 +1,174 @@
+# ==============================================================================
+# 12-backend-deploy.yaml - TNS-MES 单体后端部署清单 (Monolithic Backend)
+# ==============================================================================
+# [架构说明] 当前为单体模式: 后端 tns-mes-server (NodePort 31180) 统一提供前端页面与 API, 不再使用 Gateway/微服务/独立前端 Pod
+# --------------------------------------------------------------------------------
+# 部署要点:
+#   - 单体后端 tns-mes-server 同时承载前端页面与 REST API
+#   - 2 副本高可用, 滚动更新保证零中断 (maxUnavailable: 0)
+#   - 镜像 tns-mes-server:latest, 本地镜像 (imagePullPolicy: Never)
+#   - 数据库 (SQL Server) / Redis / JWT / 管理员密码 / SAP 连接通过环境变量注入
+#   - 就绪探针: /tns-mes/actuator/health (初始延迟 60 秒)
+#   - 存活探针: /tns-mes/actuator/health (初始延迟 120 秒)
+#   - 对外暴露: NodePort 31180, 集群内通过 tns-mes-backend-svc:8080 访问
+# ==============================================================================
+---
+# ---------- 单体后端 Deployment ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tns-mes-backend
+  namespace: tns-mes
+  labels:
+    app: tns-mes-backend
+    component: backend
+    tier: backend
+    architecture: monolithic
+    version: v1
+spec:
+  # 高可用: 2 副本
+  replicas: 2
+  # 滚动更新: 逐个替换, 保证可用性
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: tns-mes-backend
+  template:
+    metadata:
+      labels:
+        app: tns-mes-backend
+        component: backend
+        tier: backend
+        architecture: monolithic
+        version: v1
+    spec:
+      containers:
+        - name: tns-mes-server
+          # 本地构建镜像, 不从远程仓库拉取
+          image: tns-mes-server:latest
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # 资源限制: 请求 768Mi/300m, 限制 1536Mi/1500m
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "768Mi"
+            limits:
+              cpu: "1500m"
+              memory: "1536Mi"
+          env:
+            # ---------- Spring 环境 ----------
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            # ---------- 数据库 (SQL Server 2019) ----------
+            - name: MES_DB_URL
+              value: "jdbc:sqlserver://<DB_HOST>:1433;databaseName=tns_mes;encrypt=false;trustServerCertificate=true"
+            - name: MES_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: db-username
+            - name: MES_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: db-password
+            # ---------- Redis 缓存 ----------
+            - name: SPRING_DATA_REDIS_HOST
+              value: "redis-svc.tns-mes-middleware"
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+            # 关闭 Redis 健康检查 (单体模式不依赖 Redis 健康状态决定就绪)
+            - name: MANAGEMENT_HEALTH_REDIS_ENABLED
+              value: "false"
+            # ---------- JWT 密钥与管理员账号 ----------
+            - name: MES_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: jwt-secret
+            - name: MES_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: admin-password
+            # ---------- SAP S/4HANA 接口 (引用 01-config-secrets.yaml 全局配置) ----------
+            - name: SAP_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: tns-mes-config
+                  key: SAP_BASE_URL
+            - name: SAP_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: tns-mes-config
+                  key: SAP_USERNAME
+            - name: SAP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: sap-password
+          # 就绪探针: Actuator 健康检查, 初始延迟 60 秒
+          readinessProbe:
+            httpGet:
+              path: /tns-mes/actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # 存活探针: Actuator 健康检查, 初始延迟 120 秒
+          livenessProbe:
+            httpGet:
+              path: /tns-mes/actuator/health
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          # 优雅终止: 给后端足够时间处理完在途请求并下线
+          terminationGracePeriodSeconds: 60
+---
+# ---------- 单体后端 Service (NodePort 31180) ----------
+apiVersion: v1
+kind: Service
+metadata:
+  name: tns-mes-backend-svc
+  namespace: tns-mes
+  labels:
+    app: tns-mes-backend
+    component: backend
+    architecture: monolithic
+spec:
+  type: NodePort
+  selector:
+    app: tns-mes-backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 31180
+      protocol: TCP
+---
+# ---------- 单体后端 PodDisruptionBudget ----------
+# 用途: 维护/驱逐期间保证至少 1 个副本可用
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tns-mes-backend-pdb
+  namespace: tns-mes
+  labels:
+    app: tns-mes-backend
+    component: backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: tns-mes-backend

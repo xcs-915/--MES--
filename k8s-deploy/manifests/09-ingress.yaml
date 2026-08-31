@@ -1,0 +1,133 @@
+# ==============================================================================
+# 09-ingress.yaml - Nginx Ingress 路由清单 (单体模式)
+# ==============================================================================
+# [架构说明] 当前为单体模式: 后端 tns-mes-server (NodePort 31180) 统一提供前端页面与 API, 不再使用 Gateway/微服务/独立前端 Pod
+# --------------------------------------------------------------------------------
+# 说明: 通过 IngressClass nginx 统一入口, 按域名路由到各服务
+# 注意: K8s Ingress 后端 Service 必须与 Ingress 同命名空间,
+#       因此按命名空间拆分多条 Ingress 资源。
+# 路由规则 (单体模式):
+#   tns-mes.local            → tns-mes-backend-svc:8080  (单体后端: 前端页面 + API)
+#   api.tns-mes.local        → tns-mes-backend-svc:8080  (单体后端: API, 同样指向后端)
+#   grafana.tns-mes.local    → grafana-svc:3000          (tns-mes-observability)
+#   skywalking.tns-mes.local → skywalking-ui-svc:8080    (tns-mes-observability)
+#   nacos.tns-mes.local      → nacos-svc:8848            (tns-mes-middleware)
+# 变更记录:
+#   - 移除原 tns-frontend-svc (独立前端) 与 sc-gateway-svc (网关) 的引用
+#   - 前端页面与 API 均直接路由到单体后端 tns-mes-backend-svc
+# ==============================================================================
+---
+# ---------- IngressClass: nginx ----------
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: nginx
+  labels:
+    app.kubernetes.io/component: controller
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: k8s.io/ingress-nginx
+---
+# ============================================================
+# Ingress 1: 业务流量 (tns-mes 命名空间)
+# 单体模式: 前端页面与 API 均直接路由到单体后端 tns-mes-backend-svc
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tns-mes-ingress
+  namespace: tns-mes
+  labels:
+    app: tns-mes-ingress
+    component: ingress
+spec:
+  ingressClassName: nginx
+  rules:
+    # 前端页面 + API: 直接指向单体后端 (对应 NodePort 31180 的 Service)
+    - host: tns-mes.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tns-mes-backend-svc
+                port:
+                  number: 8080
+    # API 流量: 同样指向单体后端 (保留独立域名便于分流/证书管理)
+    - host: api.tns-mes.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tns-mes-backend-svc
+                port:
+                  number: 8080
+---
+# ============================================================
+# Ingress 2: 监控平台 (tns-mes-observability 命名空间)
+# Grafana + SkyWalking UI
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tns-mes-observability-ingress
+  namespace: tns-mes-observability
+  labels:
+    app: tns-mes-observability-ingress
+    component: ingress
+spec:
+  ingressClassName: nginx
+  rules:
+    # Grafana 监控面板
+    - host: grafana.tns-mes.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana-svc
+                port:
+                  number: 3000
+    # SkyWalking 链路追踪 UI
+    - host: skywalking.tns-mes.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: skywalking-ui-svc
+                port:
+                  number: 8080
+---
+# ============================================================
+# Ingress 3: 中间件管理 (tns-mes-middleware 命名空间)
+# Nacos 控制台
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tns-mes-middleware-ingress
+  namespace: tns-mes-middleware
+  labels:
+    app: tns-mes-middleware-ingress
+    component: ingress
+spec:
+  ingressClassName: nginx
+  rules:
+    # Nacos 配置中心控制台
+    - host: nacos.tns-mes.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nacos-svc
+                port:
+                  number: 8848

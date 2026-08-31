@@ -7,6 +7,7 @@ export default {
   production:'生产执行', workOrders:'生产工单', integrationCenter:'集成中心', manualSync:'接口同步', scheduledJobs:'定时任务', apiLogs:'接口调用日志',
   logout:'退出登录', search:'输入编码、名称或关键字', searchMenu:'搜索菜单',
   query:'查询', refresh:'刷新', reset:'重置', details:'详情', actions:'操作', status:'状态', source:'来源', lastSync:'最近同步',
+  masterTypeEnterprise:'企业', masterTypeFactory:'工厂', masterTypeWorkshop:'车间', masterTypeDepartment:'部门', masterTypeWarehouse:'仓库', masterTypeWorkCenter:'工作中心', masterTypeProductionLine:'产线', masterTypeWorkstation:'工位', masterTypePerson:'人员', masterTypePosition:'岗位', masterTypeCustomer:'客户', masterTypeSupplier:'供应商', masterTypeManufacturer:'制造商',
   noData:'暂无数据', all:'全部', enabled:'启用', disabled:'停用', run:'立即执行', save:'保存', cancel:'取消',
   add:'新增', edit:'编辑', delete:'删除', confirmDelete:'确认删除？',
   product:'产品', code:'编码', name:'名称', type:'类型', unit:'单位', specification:'规格', productGroup:'产品组',
@@ -62,6 +63,7 @@ export default {
   'status.ENABLED':'启用', 'status.DISABLED':'禁用', 'status.PARTIAL':'部分完成',
   'status.UNREST':'非限制使用', 'status.RESTRICTED':'限制使用', 'status.RELEASED':'已释放',
   // Interface management
+  systemName:'系统', duration:'耗时', error:'错误', requestParams:'请求参数', requestBody:'请求体', response:'响应', apiLog:'接口日志',
   interfaceManagement:'接口管理', interfaceManagementSubtitle:'统一管理多系统接口分类、外部系统和接口定义。接口按大类组织，支持SAP、中台、WMS等多系统接入。',
   interfaceCategory:'接口大类', externalSystem:'外部系统', interfaceDefinition:'接口定义',
   syncDirection:'同步方向', authType:'认证方式', dirInbound:'入站(拉取)', dirOutbound:'出站(推送)', dirBidirectional:'双向'

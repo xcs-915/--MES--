@@ -12,6 +12,7 @@ import { dataTable, paginationHTML } from '../components/table.js';
 import { detailGrid, emptyState, statusPill, sectionTitle } from '../components/feedback.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../utils/ui.js';
+import { localizedMeta } from '../utils/format.js';
 import { formatDate } from '../utils/format.js';
 
 export function renderIam() {
@@ -24,7 +25,7 @@ export async function loadRoles() {
   try {
     const data = await api('/iam/roles?size=200');
     state.data.roles = data.data.items || [];
-    node.innerHTML = dataTable([t('code'), t('name'), t('permission'), t('status'), t('actions')], state.data.roles.map(v => `<tr><td class="code">${escVal(v.code)}</td><td>${escVal(v.nameZh)}<span class="cell-sub">${escVal(v.nameEn || v.nameAr)}</span></td><td>${(v.permissions || []).length}</td><td>${statusPill(v.status)}</td><td class="table-actions">${btn('role-detail', icon('shield-check'), 'ghost', 'USER_ADMIN')} ${btn('role-delete', icon('trash-2'), 'ghost', 'USER_ADMIN')}</td></tr>`));
+    node.innerHTML = dataTable([t('code'), t('name'), t('permission'), t('status'), t('actions')], state.data.roles.map(v => `<tr><td class="code">${escVal(v.code)}</td><td>${escVal(localizedMeta(v, 'name'))}<span class="cell-sub">${escVal(v.nameZh || v.nameEn || v.nameAr)}</span></td><td>${(v.permissions || []).length}</td><td>${statusPill(v.status)}</td><td class="table-actions">${btn('role-detail', icon('shield-check'), 'ghost', 'USER_ADMIN')} ${btn('role-delete', icon('trash-2'), 'ghost', 'USER_ADMIN')}</td></tr>`));
   } catch (e) { node.innerHTML = emptyState(e.message); }
   renderIcons();
 }
@@ -56,7 +57,7 @@ export async function openRoleDetail(role) {
         <span class="muted" style="margin-left:auto;font-size:12px">${list.filter(p => rolePerms.has(p.code)).length}/${list.length}</span>
       </div>
       <div class="perm-group-body" style="padding:4px 0 8px 28px;display:flex;flex-wrap:wrap;gap:4px;">
-        ${list.map(p => `<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg-page);border-radius:var(--r-sm);cursor:pointer;font-size:12px;"><input type="checkbox" value="${esc(p.code)}" class="perm-item" ${rolePerms.has(p.code) ? 'checked' : ''} style="accent-color:var(--primary)"><span>${esc(p.nameZh)}</span><span class="cell-sub" style="font-size:10px;color:var(--text-tertiary)">${esc(p.permissionType)}</span></label>`).join('')}
+        ${list.map(p => `<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg-page);border-radius:var(--r-sm);cursor:pointer;font-size:12px;"><input type="checkbox" value="${esc(p.code)}" class="perm-item" ${rolePerms.has(p.code) ? 'checked' : ''} style="accent-color:var(--primary)"><span>${esc(localizedMeta(p, 'name'))}</span><span class="cell-sub" style="font-size:10px;color:var(--text-tertiary)">${esc(p.permissionType)}</span></label>`).join('')}
       </div>
     </div>`;
   }).join('');

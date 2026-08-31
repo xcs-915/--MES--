@@ -1,0 +1,201 @@
+# [架构说明] 当前为单体模式: 后端 tns-mes-server (NodePort 31180) 统一提供前端页面与 API, 不再使用 Gateway/微服务/独立前端 Pod
+# 注意: 独立前端 Pod 已移除, 此 Nginx 配置当前无消费者, 保留备用
+# ============================================================
+# 12-frontend-nginx-config.yaml - 前端 Nginx 配置 ConfigMap
+# 命名空间: tns-mes
+# 说明: 为 08-frontend.yaml 中的 tns-frontend Pod 提供 Nginx 配置
+# 功能:
+#   - 静态文件服务 (Vue3 SPA, /usr/share/nginx/html)
+#   - 反向代理 /api → sc-gateway-svc:8080 (SpringCloud Gateway)
+#   - SPA history 路由 fallback → index.html
+# ConfigMap 包含两个 key:
+#   - nginx-main.conf: 主配置 (worker / events / http 块)
+#   - nginx.conf:       server 配置 (反向代理 + 静态资源)
+# ============================================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx-conf
+  namespace: tns-mes
+  labels:
+    app: tns-frontend
+    component: frontend
+data:
+  # ============================================================
+  # nginx-main.conf - Nginx 主配置 (worker / events / http)
+  # 挂载到: /etc/nginx/nginx.conf
+  # ============================================================
+  nginx-main.conf: |
+    # 运行用户
+    user nginx;
+    # worker 进程数 (与容器 CPU 对齐)
+    worker_processes auto;
+    # PID 文件
+    pid /var/run/nginx.pid;
+
+    # 错误日志
+    error_log /var/log/nginx/error.log warn;
+
+    # ---------- events 块 ----------
+    events {
+        # 每个 worker 最大连接数
+        worker_connections 1024;
+        # 启用多路复用
+        use epoll;
+        # 允许同时接受多个连接
+        multi_accept on;
+    }
+
+    # ---------- http 块 ----------
+    http {
+        # 文件扩展名与 MIME 类型映射
+        include /etc/nginx/mime.types;
+        # 默认类型
+        default_type application/octet-stream;
+
+        # 日志格式 (JSON 结构化)
+        log_format main '$remote_addr - $remote_user [$time_local] '
+                        '"$request" $status $body_bytes_sent '
+                        '"$http_referer" "$http_user_agent" '
+                        'rt=$request_time uct="$upstream_connect_time" '
+                        'uht="$upstream_header_time" urt="$upstream_response_time"';
+
+        access_log /var/log/nginx/access.log main;
+
+        # 发送文件 (静态资源高效传输)
+        sendfile on;
+        # 数据包不等待, 立即发送
+        tcp_nopush on;
+        tcp_nodelay on;
+
+        # 保持连接超时
+        keepalive_timeout 65;
+        keepalive_requests 1000;
+
+        # 客户端请求体大小限制 (上传文件)
+        client_max_body_size 50m;
+        client_body_buffer_size 1m;
+
+        # gzip 压缩 (减小传输体积)
+        gzip on;
+        gzip_min_length 1k;
+        gzip_comp_level 6;
+        gzip_types text/plain text/css text/javascript
+                   application/javascript application/json
+                   application/xml image/svg+xml;
+        gzip_vary on;
+
+        # 后端长连接缓存 (网关反代)
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        # 包含 server 配置
+        include /etc/nginx/conf.d/*.conf;
+    }
+
+  # ============================================================
+  # nginx.conf - server 配置 (反向代理 + 静态资源)
+  # 挂载到: /etc/nginx/conf.d/default.conf
+  # ============================================================
+  nginx.conf: |
+    server {
+        # 监听 80 端口
+        listen 80;
+        listen [::]:80;
+
+        # 服务名
+        server_name localhost;
+
+        # 字符集
+        charset utf-8;
+
+        # ---------- 静态资源根目录 (Vue3 构建产物) ----------
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # ---------- gzip 压缩 (本 server 级别覆盖) ----------
+        gzip on;
+        gzip_min_length 1k;
+        gzip_comp_level 6;
+
+        # ---------- 反向代理: /api → SpringCloud Gateway ----------
+        location /api/ {
+            # 去除 /api 前缀, 转发到网关 (网关路由按 StripPrefix 处理)
+            # 注意: 若网关已配置 StripPrefix=1, 则保留 /api; 否则需 rewrite
+            # 此处保留原始路径转发, 网关侧通过路由规则匹配 /api/**
+            proxy_pass http://sc-gateway-svc.tns-mes:8080/api/;
+
+            # 传递真实客户端信息
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # WebSocket 支持
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+
+            # 代理超时设置
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+
+            # 缓冲设置
+            proxy_buffering on;
+            proxy_buffer_size 4k;
+            proxy_buffers 8 4k;
+        }
+
+        # ---------- 反向代理: /actuator → 网关 Actuator (监控) ----------
+        location /actuator/ {
+            proxy_pass http://sc-gateway-svc.tns-mes:8080/actuator/;
+
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # 限制内网访问 (生产环境建议加白名单)
+            # allow 10.0.0.0/8;
+            # deny all;
+        }
+
+        # ---------- 静态资源缓存策略 ----------
+        # JS / CSS 文件: 长缓存 (带 hash 文件名)
+        location ~* \.(?:js|css)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            access_log off;
+        }
+
+        # 图片 / 字体 / 图标: 中等缓存
+        location ~* \.(?:png|jpe?g|gif|ico|svg|woff2?|ttf|eot)$ {
+            expires 30d;
+            add_header Cache-Control "public";
+            access_log off;
+        }
+
+        # index.html: 不缓存 (保证发版即时生效)
+        location = /index.html {
+            add_header Cache-Control "no-cache, no-store, must-revalidate";
+            expires 0;
+        }
+
+        # ---------- Vue3 SPA History 路由 fallback ----------
+        # 所有未匹配的路由回退到 index.html, 交由前端路由处理
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # ---------- 健康检查端点 ----------
+        location = /healthz {
+            access_log off;
+            return 200 "ok";
+            add_header Content-Type text/plain;
+        }
+
+        # ---------- 安全头 ----------
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+    }

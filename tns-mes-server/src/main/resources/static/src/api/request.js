@@ -21,20 +21,43 @@ export async function api(path, options = {}) {
   };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
 
-  const res = await fetch(`${apiBase()}${path}`, {
+  const fullUrl = `${apiBase()}${path}`;
+  const method = options.method || 'GET';
+  const bodyData = options.body === undefined ? undefined : JSON.stringify(options.body);
+
+  // Print complete request info to browser console
+  console.groupCollapsed(`%c[API] ${method} ${path}`, 'color:#7C3AED;font-weight:bold');
+  console.log('Full URL:', fullUrl);
+  console.log('Method:', method);
+  console.log('Headers:', { ...headers, Authorization: headers.Authorization ? 'Bearer ***' : '(none)' });
+  if (options.body !== undefined) {
+    console.log('Request Body:', options.body);
+    console.log('Request Body (JSON):', bodyData);
+  }
+  console.time(`[API] ${path}`);
+
+  const res = await fetch(fullUrl, {
     ...options,
+    method,
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: bodyData,
   });
+
+  console.timeEnd(`[API] ${path}`);
 
   let payload = null;
   try { payload = await res.json(); } catch {}
+
+  console.log('Response Status:', res.status, res.statusText);
+  console.log('Response Data:', payload);
+  console.groupEnd();
 
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error(t('invalidLogin'));
   }
   if (!res.ok || (payload && payload.code && payload.code !== 0)) {
+    console.error(`[API ERROR] ${method} ${path}`, { status: res.status, payload });
     throw new Error(payload?.message || t('failedRequest'));
   }
   return payload;

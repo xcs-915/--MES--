@@ -1,0 +1,336 @@
+# [架构说明] 当前为单体模式: 后端 tns-mes-server (NodePort 31180) 统一提供前端页面与 API, 不再使用 Gateway/微服务/独立前端 Pod
+# ==============================================================================
+# 04-rocketmq.yaml
+# TNS-MES Phase 3 高可用部署 - RocketMQ (2 NameServer + 2 Broker)
+# 说明: RocketMQ 5.1.0, NameServer 2 副本保证注册中心高可用
+#       Broker 2 副本 (均为 Master) 提供消息队列高可用
+#       微服务通过 ROCKETMQ_NAMESERVER 连接 NameServer 服务
+# ==============================================================================
+
+---
+# ConfigMap: RocketMQ Broker 配置模板
+# 用途: 供 Broker Pod 的 initContainer 动态生成节点配置 (brokerName/brokerIP)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rocketmq-broker-config
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: rocketmq
+    app.kubernetes.io/part-of: tns-mes
+data:
+  broker.conf: |
+    # Broker 基础配置 (由 initContainer 动态补充 brokerName 和 brokerIP1)
+    brokerClusterName=DefaultCluster
+    brokerId=0
+    deleteWhen=04
+    fileReservedTime=48
+    brokerRole=ASYNC_MASTER
+    flushDiskType=ASYNC_FLUSH
+    # NameServer 地址 (通过服务发现)
+    namesrvAddr=rocketmq-namesrv-svc.tns-mes-middleware:9876
+    # 自动创建 Topic (生产环境可关闭, 由管控台手动创建)
+    autoCreateTopicEnable=true
+    autoCreateSubscriptionGroup=true
+    # 消息大小限制 (默认 4MB)
+    maxMessageSize=4194304
+    # 心跳与空闲检测
+    brokerHeartbeatInterval=10000
+    brokerHeartbeatTimeout=12000
+
+---
+# Headless Service: RocketMQ NameServer 稳定 DNS
+# 用途: 为 NameServer Pod 提供稳定域名, 便于 Broker 和客户端发现
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketmq-namesrv-headless
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: rocketmq-namesrv
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: cluster-discovery
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: rocketmq-namesrv
+  ports:
+    - name: namesrv
+      port: 9876
+      targetPort: 9876
+      protocol: TCP
+
+---
+# Service: RocketMQ NameServer 客户端访问 (ClusterIP)
+# 用途: 微服务和 Broker 通过此服务连接 NameServer
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketmq-namesrv-svc
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: rocketmq-namesrv
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: client-access
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rocketmq-namesrv
+  ports:
+    - name: namesrv
+      port: 9876
+      targetPort: 9876
+      protocol: TCP
+
+---
+# StatefulSet: RocketMQ NameServer (2 副本)
+# 说明: NameServer 无状态, 可水平扩展; 互不通信, 各自维护路由信息
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rocketmq-namesrv
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: rocketmq-namesrv
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: nameserver
+spec:
+  serviceName: rocketmq-namesrv-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rocketmq-namesrv
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rocketmq-namesrv
+        app.kubernetes.io/part-of: tns-mes
+        app.kubernetes.io/component: nameserver
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - rocketmq-namesrv
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: namesrv
+          image: registry.cn-hangzhou.aliyuncs.com/apache/rocketmq:5.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "mqnamesrv"]
+          ports:
+            - name: namesrv
+              containerPort: 9876
+          env:
+            # JVM 内存参数 (适配 512Mi limit)
+            - name: JAVA_OPT_EXT
+              value: "-server -Xms256m -Xmx256m -Xmn128m"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          # 就绪探针: NameServer 端口可达
+          readinessProbe:
+            tcpSocket:
+              port: 9876
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # 存活探针
+          livenessProbe:
+            tcpSocket:
+              port: 9876
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: namesrv-logs
+              mountPath: /home/rocketmq/logs
+      volumes:
+        - name: namesrv-logs
+          emptyDir: {}
+
+---
+# Headless Service: RocketMQ Broker 稳定 DNS
+# 用途: 为 Broker Pod 提供稳定域名, 便于客户端路由
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketmq-broker-headless
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: rocketmq-broker
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: cluster-discovery
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: rocketmq-broker
+  ports:
+    - name: broker
+      port: 10911
+      targetPort: 10911
+      protocol: TCP
+    - name: broker-ha
+      port: 10912
+      targetPort: 10912
+      protocol: TCP
+
+---
+# Service: RocketMQ Broker 客户端访问 (ClusterIP)
+# 用途: 消息生产者/消费者通过此服务连接 Broker
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketmq-broker-svc
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: rocketmq-broker
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: client-access
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rocketmq-broker
+  ports:
+    - name: broker
+      port: 10911
+      targetPort: 10911
+      protocol: TCP
+
+---
+# StatefulSet: RocketMQ Broker (2 副本, 均为 Master)
+# 说明: 每个 Broker 为独立 Master, 通过 initContainer 注入唯一的 brokerName 和 IP
+#       生产环境建议配置 Master-Slave 或启用 DLedger 模式实现高可用
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rocketmq-broker
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: rocketmq-broker
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: broker
+spec:
+  serviceName: rocketmq-broker-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rocketmq-broker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rocketmq-broker
+        app.kubernetes.io/part-of: tns-mes
+        app.kubernetes.io/component: broker
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - rocketmq-broker
+                topologyKey: kubernetes.io/hostname
+      # initContainer: 动态生成 broker.conf (注入 brokerName 和 brokerIP1)
+      initContainers:
+        - name: broker-config-init
+          image: registry.cn-hangzhou.aliyuncs.com/library/busybox:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # 复制基础配置模板
+              cp /config-template/broker.conf /data/broker.conf
+              # 注入 brokerName (基于 Pod 序号, 保证唯一)
+              echo "brokerName=broker-${POD_NAME##*-}" >> /data/broker.conf
+              # 注入 brokerIP1 为当前 Pod IP (集群内可达)
+              echo "brokerIP1=${POD_IP}" >> /data/broker.conf
+              echo "Broker 配置生成完成: brokerName=broker-${POD_NAME##*-}, brokerIP1=${POD_IP}"
+              cat /data/broker.conf
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          volumeMounts:
+            - name: config-template
+              mountPath: /config-template
+            - name: broker-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+      containers:
+        - name: broker
+          image: registry.cn-hangzhou.aliyuncs.com/apache/rocketmq:5.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "mqbroker", "-c", "/data/broker.conf"]
+          ports:
+            - name: broker
+              containerPort: 10911
+            - name: broker-ha
+              containerPort: 10912
+          env:
+            # JVM 内存参数 (适配 1536Mi limit)
+            - name: JAVA_OPT_EXT
+              value: "-server -Xms768m -Xmx768m -Xmn256m"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "768Mi"
+            limits:
+              cpu: "500m"
+              memory: "1536Mi"
+          # 就绪探针: Broker 端口可达
+          readinessProbe:
+            tcpSocket:
+              port: 10911
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # 存活探针
+          livenessProbe:
+            tcpSocket:
+              port: 10911
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: broker-data
+              mountPath: /data
+            - name: broker-logs
+              mountPath: /home/rocketmq/logs
+            - name: broker-store
+              mountPath: /home/rocketmq/store
+      volumes:
+        - name: config-template
+          configMap:
+            name: rocketmq-broker-config
+        - name: broker-data
+          emptyDir: {}
+        - name: broker-logs
+          emptyDir: {}
+        - name: broker-store
+          emptyDir: {}

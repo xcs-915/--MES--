@@ -1,0 +1,220 @@
+# [架构说明] 当前为单体模式: 后端 tns-mes-server (NodePort 31180) 统一提供前端页面与 API, 不再使用 Gateway/微服务/独立前端 Pod
+# ============================================================
+# 10-skywalking.yaml - SkyWalking 链路追踪部署清单
+# 监控命名空间: tns-mes-observability
+# 说明: OAP Server (分析平台) + UI 界面, 使用 SQL Server 存储 trace 数据
+# 组件:
+#   - skywalking-oap: gRPC 11800 (agent 上报), HTTP 12800 (UI 查询)
+#   - skywalking-ui:  HTTP 8080 (Web 界面)
+# 镜像版本: 9.7.0
+# ============================================================
+---
+# ---------- SkyWalking OAP Server Deployment ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skywalking-oap
+  namespace: tns-mes-observability
+  labels:
+    app: skywalking-oap
+    component: tracing
+    tier: observability
+    version: v9.7.0
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: skywalking-oap
+  template:
+    metadata:
+      labels:
+        app: skywalking-oap
+        component: tracing
+        tier: observability
+        version: v9.7.0
+    spec:
+      containers:
+        - name: skywalking-oap
+          image: apache/skywalking-oap-server:9.7.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            # gRPC: 接收 Agent 上报的 trace 数据
+            - name: grpc
+              containerPort: 11800
+              protocol: TCP
+            # HTTP: 提供 RESTful 查询接口给 UI
+            - name: http
+              containerPort: 12800
+              protocol: TCP
+          # 资源限制: 2Gi / 1 CPU (OAP 是计算密集型)
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "4000m"
+              memory: "4Gi"
+          # 使用 SQL Server 存储 trace 数据
+          env:
+            # 存储后端: SQL Server
+            - name: SW_STORAGE
+              value: "mssql"
+            # SQL Server 连接信息 (10.30.10.141:1433, 数据库 tns_mes_skywalking)
+            - name: SW_STORAGE_MYSQL_NODES
+              value: "10.30.10.141:1433"
+            - name: SW_JDBC_URL
+              value: "jdbc:sqlserver://10.30.10.141:1433;databaseName=tns_mes_skywalking;encrypt=false;trustServerCertificate=true"
+            - name: SW_DATA_SOURCE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: db.username
+            - name: SW_DATA_SOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: db.password
+            # 集群模式: 单节点
+            - name: SW_CLUSTER
+              value: "standalone"
+            # Java 堆内存
+            - name: JAVA_OPTS
+              value: "-Xms2g -Xmx2g -XX:MaxMetaspaceSize=256m"
+          # 就绪探针: OAP HTTP 端口健康检查
+          readinessProbe:
+            tcpSocket:
+              port: 12800
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          # 存活探针
+          livenessProbe:
+            tcpSocket:
+              port: 12800
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+      # 优雅终止: OAP 需要时间刷盘
+      terminationGracePeriodSeconds: 90
+---
+# ---------- SkyWalking OAP Service (ClusterIP) ----------
+apiVersion: v1
+kind: Service
+metadata:
+  name: skywalking-oap
+  namespace: tns-mes-observability
+  labels:
+    app: skywalking-oap
+    component: tracing
+spec:
+  type: ClusterIP
+  selector:
+    app: skywalking-oap
+  ports:
+    # gRPC: Agent 上报 trace
+    - name: grpc
+      port: 11800
+      targetPort: 11800
+      protocol: TCP
+    # HTTP: UI 查询接口
+    - name: http
+      port: 12800
+      targetPort: 12800
+      protocol: TCP
+---
+# ---------- SkyWalking UI Deployment ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skywalking-ui
+  namespace: tns-mes-observability
+  labels:
+    app: skywalking-ui
+    component: tracing-ui
+    tier: observability
+    version: v9.7.0
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: skywalking-ui
+  template:
+    metadata:
+      labels:
+        app: skywalking-ui
+        component: tracing-ui
+        tier: observability
+        version: v9.7.0
+    spec:
+      containers:
+        - name: skywalking-ui
+          image: apache/skywalking-ui:9.7.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # 资源限制: 256Mi / 100m
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          env:
+            # 后端 OAP 地址 (同命名空间)
+            - name: SW_OAP_ADDRESS
+              value: "http://skywalking-oap:12800"
+            - name: SW_OAP_UI_HOST
+              value: "skywalking-oap"
+            - name: SW_OAP_UI_PORT
+              value: "12800"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+      terminationGracePeriodSeconds: 30
+---
+# ---------- SkyWalking UI Service (ClusterIP) ----------
+apiVersion: v1
+kind: Service
+metadata:
+  name: skywalking-ui-svc
+  namespace: tns-mes-observability
+  labels:
+    app: skywalking-ui
+    component: tracing-ui
+spec:
+  type: ClusterIP
+  selector:
+    app: skywalking-ui
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

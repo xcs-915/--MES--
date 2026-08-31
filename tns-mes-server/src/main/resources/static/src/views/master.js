@@ -12,17 +12,14 @@ import { dataTable, paginationHTML } from '../components/table.js';
 import { emptyState, detailGrid, statusPill } from '../components/feedback.js';
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../utils/ui.js';
+import { localizedMeta } from '../utils/format.js';
 
 export function renderMaster() {
+  const typeLabel = code => t('masterType' + code.charAt(0) + code.slice(1).toLowerCase().replace(/_([a-z])/g, (_, c) => c.toUpperCase()));
   const fields = [
     filterField('master-search', t('search'), 'text', null, t('code') + '/' + t('name')),
     filterField('master-type', t('type'), 'select', [
-      {value:'FACTORY', label:'Factory'}, {value:'WORKSHOP', label:'Workshop'},
-      {value:'DEPARTMENT', label:'Department'}, {value:'WAREHOUSE', label:'Warehouse'},
-      {value:'WORK_CENTER', label:'Work center'}, {value:'PRODUCTION_LINE', label:'Production line'},
-      {value:'WORKSTATION', label:'Workstation'}, {value:'PERSON', label:'Person'},
-      {value:'POSITION', label:'Position'}, {value:'CUSTOMER', label:'Customer'},
-      {value:'SUPPLIER', label:'Supplier'}, {value:'MANUFACTURER', label:'Manufacturer'}
+      ...['FACTORY','WORKSHOP','DEPARTMENT','WAREHOUSE','WORK_CENTER','PRODUCTION_LINE','WORKSTATION','PERSON','POSITION','CUSTOMER','SUPPLIER','MANUFACTURER'].map(value => ({ value, label: typeLabel(value) }))
     ])
   ];
   $('#page').innerHTML = pageHead(t('foundation'), t('masterData'), t('masterSubtitle'), btn('master-add', icon('plus') + t('add'), 'primary', 'BASIC_DATA_WRITE')) + `<div class="panel">${toolbar(fields)}<div id="master-table"></div></div>`;
@@ -37,7 +34,7 @@ export async function loadMaster() {
     const data = await api(`/master-data/${type}?size=100&keyword=${encodeURIComponent($('#master-search')?.value || '')}`);
     const items = data.data.items || [];
     state.data.master = items;
-    node.innerHTML = items.length ? dataTable([t('code'), t('name'), t('status'), t('actions')], items.map(v => `<tr><td class="code">${escVal(v.code)}</td><td><span class="cell-title">${escVal(v.nameZh)}</span><span class="cell-sub">${escVal(v.nameEn || v.nameAr)}</span></td><td>${statusPill(v.status)}</td><td class="table-actions">${btn('master-detail', icon('eye'), 'ghost')} ${btn('master-edit', icon('pencil'), 'ghost', 'BASIC_DATA_WRITE')} ${btn('master-delete', icon('trash-2'), 'ghost', 'BASIC_DATA_WRITE')}</td></tr>`)) : emptyState();
+    node.innerHTML = items.length ? dataTable([t('code'), t('name'), t('status'), t('actions')], items.map(v => `<tr><td class="code">${escVal(v.code)}</td><td><span class="cell-title">${escVal(localizedMeta(v, 'name'))}</span><span class="cell-sub">${escVal(v.nameZh || v.nameEn || v.nameAr)}</span></td><td>${statusPill(v.status)}</td><td class="table-actions">${btn('master-detail', icon('eye'), 'ghost')} ${btn('master-edit', icon('pencil'), 'ghost', 'BASIC_DATA_WRITE')} ${btn('master-delete', icon('trash-2'), 'ghost', 'BASIC_DATA_WRITE')}</td></tr>`)) : emptyState();
   } catch (e) { node.innerHTML = emptyState(e.message); }
   renderIcons();
 }

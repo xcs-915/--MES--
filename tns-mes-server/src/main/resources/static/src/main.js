@@ -198,8 +198,8 @@ document.addEventListener('click', async event => {
 
   // Dictionary item actions
   if (action === 'dict-item-add' || action === 'dictionary-add') { openDictionaryCreate(); return; }
-  if (action === 'dictionary-edit') { const row = actionNode.closest('tr'); const code = row.querySelector('.code').textContent.trim(); const item = (state.data.dictionaries || []).find(v => v.dictCode === code); if (item) openDictionaryEdit(item); return; }
-  if (action === 'dictionary-delete') { const id = (state.data.dictionaries || []).find(v => v.dictCode === actionNode.closest('tr').querySelector('.code').textContent.trim())?.id; if (id && confirm(t('confirmDelete'))) { await api('/system/dictionaries/' + id, { method: 'DELETE' }).then(() => { toast(t('saved')); loadDictionaries(); }); } return; }
+  if (action === 'dictionary-edit') { const row = actionNode.closest('tr'); const id = row?.dataset.id; const dictType = row?.dataset.type; const dictCode = row?.dataset.code; const item = (state.data.dictionaries || []).find(v => String(v.id) === String(id) && v.dictType === dictType && v.dictCode === dictCode); if (item) openDictionaryEdit(item); else if (id) { const res = await api('/system/dictionaries?type=' + encodeURIComponent(dictType)); const found = (res.data||[]).find(v => String(v.id) === String(id)); if (found) openDictionaryEdit(found); } return; }
+  if (action === 'dictionary-delete') { const row = actionNode.closest('tr'); const id = row?.dataset.id; if (id && confirm(t('confirmDelete'))) { await api('/system/dictionaries/' + id, { method: 'DELETE' }).then(() => { toast(t('saved')); loadDictionaries(); }); } return; }
 
   // Create drawers
   if (action === 'add-role') { openRoleCreate(); return; }
@@ -268,7 +268,13 @@ $('#mobile-menu').addEventListener('click', () => $('#sidebar').classList.toggle
 $('#global-refresh').addEventListener('click', () => renderView(state.view));
 
 // Language switcher
-$$('[data-lang]').forEach(node => node.addEventListener('click', () => setLanguage(node.dataset.lang)));
+$$('[data-lang]').forEach(node => node.addEventListener('click', async () => {
+  setLanguage(node.dataset.lang);
+  if (state.token) {
+    await loadNavigation();
+    renderView(state.view);
+  }
+}));
 
 // Nav search
 $('#nav-search').addEventListener('input', event => {

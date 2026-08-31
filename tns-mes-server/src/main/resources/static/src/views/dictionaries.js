@@ -18,6 +18,37 @@ import { formatDate } from '../utils/format.js';
 let currentType = '';
 let typeList = [];
 
+// dict_type code → Chinese display name mapping
+// This provides proper type names instead of using the first item's label
+const DICT_TYPE_LABELS = {
+  'COMPANY_CODE': '公司代码',
+  'PLANT': '工厂',
+  'WAREHOUSE': '仓库',
+  'WORK_CENTER': '工作中心',
+  'MATERIAL_TYPE': '物料类型',
+  'MATERIAL_GROUP': '物料组',
+  'PRODUCT_GROUP': '产品组',
+  'MRP_CONTROLLER': 'MRP控制者',
+  'PRODUCTION_SUPERVISOR': '生产主管',
+  'ORDER_TYPE': '订单类型',
+  'STATUS_TYPE': '状态类型',
+  'PRODUCT_STATUS': '产品状态',
+  'WORK_ORDER_STATUS': '工单状态',
+  'BATCH_STATUS': '批次状态',
+  'SYNC_STATUS': '同步状态',
+};
+
+function getTypeLabel(typeCode) {
+  return DICT_TYPE_LABELS[typeCode] || typeCode;
+}
+
+function localizedDictLabel(item) {
+  if (!item) return '';
+  if (state.lang === 'ar-TN') return item.labelAr || item.labelEn || item.labelZh || item.dictType;
+  if (state.lang === 'en') return item.labelEn || item.labelZh || item.dictType;
+  return item.labelZh || item.dictType;
+}
+
 export function renderDictionaries() {
   $('#page').innerHTML = pageHead(t('foundation'), t('dataDictionary'), t('accessSubtitle'),
     btn('dict-type-add', icon('plus') + t('add') + ' ' + t('dictType'), 'primary', 'USER_ADMIN'))
@@ -49,7 +80,7 @@ async function loadDictionaryTypes() {
   try {
     const all = (await api('/system/dictionaries')).data || [];
     state.data.dictionaries = all;
-    // Group by dictType
+    // Group by dictType, exclude INACTIVE items from type count
     const typeMap = {};
     all.forEach(item => {
       if (!typeMap[item.dictType]) typeMap[item.dictType] = [];
@@ -58,8 +89,8 @@ async function loadDictionaryTypes() {
     typeList = Object.keys(typeMap).sort().map(typeCode => ({
       type: typeCode,
       count: typeMap[typeCode].length,
-      // Try to find a representative label from items with sortOrder 0 or similar
-      name: typeMap[typeCode].find(i => i.labelZh)?.labelZh || typeCode
+      // Use proper type label from mapping; for custom types, look for DEFAULT entry
+      name: localizedDictLabel(typeMap[typeCode].find(i => i.dictCode === 'DEFAULT') || typeMap[typeCode][0]) || getTypeLabel(typeCode)
     }));
     renderTypeList();
     // Auto-select first type
@@ -115,7 +146,8 @@ async function loadDictItems() {
     return;
   }
   const typeInfo = typeList.find(t => t.type === currentType);
-  if (title) title.innerHTML = `${icon('list')} ${esc(t('dictData'))} - ${escVal(typeInfo?.name || currentType)}`;
+  const typeLabel = typeInfo?.name || getTypeLabel(currentType);
+  if (title) title.innerHTML = `${icon('list')} ${esc(t('dictData'))} - ${escVal(typeLabel)}`;
   try {
     const items = (await api('/system/dictionaries?type=' + encodeURIComponent(currentType))).data || [];
     const headers = [
@@ -126,7 +158,7 @@ async function loadDictItems() {
       { key: 'status', label: t('status'), sortable: false },
       { key: 'actions', label: t('actions'), sortable: false }
     ];
-    const rows = items.map(v => `<tr>
+    const rows = items.map(v => `<tr data-id="${escVal(v.id)}" data-type="${escVal(v.dictType)}" data-code="${escVal(v.dictCode)}">
       <td class="code">${escVal(v.dictCode)}</td>
       <td>${escVal(v.labelZh)}<span class="cell-sub">${escVal(v.labelEn || v.labelAr)}</span></td>
       <td>${escVal(v.dictValue)}</td>
@@ -190,11 +222,12 @@ export function openDictTypeCreate() {
 }
 
 export function openDictTypeEdit(typeInfo) {
+  const typeLabel = getTypeLabel(typeInfo.type);
   openDrawer(t('edit') + ' · ' + t('dictType'), t('accessSubtitle'),
     `<div class="drawer-body"><div class="form-grid">
       <label><span>${t('dictType')}</span><input id="edit-type-old" value="${escVal(typeInfo.type)}" disabled></label>
       <label><span>${t('newType')}</span><input id="edit-type-new" value="${escVal(typeInfo.type)}" required></label>
-      <label><span>${t('label')}</span><input id="edit-type-label" value="${escVal(typeInfo.name || '')}" placeholder="${esc(t('label'))}"></label>
+      <label><span>${t('label')}</span><input id="edit-type-label" value="${escVal(typeLabel)}" placeholder="${esc(t('label'))}"></label>
     </div></div>
     <div class="form-footer">
       <button class="btn secondary" data-action="close-drawer">${t('cancel')}</button>

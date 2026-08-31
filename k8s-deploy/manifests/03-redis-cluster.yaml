@@ -1,0 +1,294 @@
+# [架构说明] 当前为单体模式: 后端 tns-mes-server (NodePort 31180) 统一提供前端页面与 API, 不再使用 Gateway/微服务/独立前端 Pod
+# ==============================================================================
+# 03-redis-cluster.yaml
+# TNS-MES Phase 3 高可用部署 - Redis 集群 (3主3从, 共6节点)
+# 说明: Redis 7.0 集群模式, 启用密码认证, 使用 initContainer 配置集群
+#       6 个节点自动形成 3 主 3 从拓扑, 单节点故障不影响数据可用性
+# ==============================================================================
+
+---
+# ConfigMap: Redis 集群创建脚本
+# 用途: 在所有 Redis 节点就绪后, 通过 redis-cli --cluster create 自动组建集群
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-cluster-init-script
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: tns-mes
+data:
+  create-cluster.sh: |
+    #!/bin/sh
+    set -e
+    echo "等待所有 Redis 节点启动..."
+    for i in 0 1 2 3 4 5; do
+      HOST="redis-node-${i}.redis-headless.tns-mes-middleware.svc.cluster.local"
+      until redis-cli -h ${HOST} -p 6379 -a Taiking@5563 --no-auth-warning ping | grep -q PONG; do
+        echo "等待 redis-node-${i} 就绪..."
+        sleep 3
+      done
+      echo "redis-node-${i} 已就绪"
+    done
+    echo "所有节点就绪, 开始创建 Redis 集群 (3主3从)..."
+    redis-cli --cluster create \
+      redis-node-0.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
+      redis-node-1.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
+      redis-node-2.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
+      redis-node-3.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
+      redis-node-4.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
+      redis-node-5.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
+      --cluster-replicas 1 \
+      -a Taiking@5563 --no-auth-warning \
+      --cluster-yes
+    echo "Redis 集群创建完成!"
+    redis-cli --cluster check \
+      redis-node-0.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
+      -a Taiking@5563 --no-auth-warning
+
+---
+# Headless Service: Redis 节点稳定 DNS
+# 用途: 为每个 Redis Pod 提供稳定域名 (redis-node-0.redis-headless 等)
+#       集群创建和节点发现依赖此 Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: cluster-discovery
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: redis-client
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+    - name: redis-bus
+      port: 16379
+      targetPort: 16379
+      protocol: TCP
+
+---
+# Service: Redis 客户端访问入口 (ClusterIP)
+# 用途: 微服务通过 redis-svc.tns-mes-middleware:6379 连接 Redis 集群
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-svc
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: client-access
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: redis-client
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+
+---
+# StatefulSet: Redis 集群节点 (6 副本: 3主3从)
+# 说明: 每个 Pod 运行一个 Redis 节点, initContainer 生成节点配置
+#       集群创建由后续 Job 自动完成
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-node
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: cache-cluster
+spec:
+  serviceName: redis-headless
+  replicas: 6
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/part-of: tns-mes
+        app.kubernetes.io/component: cache-cluster
+    spec:
+      # 反亲和: 尽量将 Redis Pod 分散到不同节点
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - redis
+                topologyKey: kubernetes.io/hostname
+      # initContainer: 生成 Redis 节点配置 (含 cluster-announce-ip)
+      initContainers:
+        - name: redis-init
+          image: registry.cn-hangzhou.aliyuncs.com/library/redis:7.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /data/redis.conf <<'EOF'
+              # Redis 集群配置
+              bind 0.0.0.0
+              port 6379
+              protected-mode yes
+              # 密码认证
+              requirepass Taiking@5563
+              masterauth Taiking@5563
+              # 集群模式
+              cluster-enabled yes
+              cluster-config-file nodes.conf
+              cluster-node-timeout 5000
+              cluster-announce-port 6379
+              cluster-announce-bus-port 16379
+              # 持久化: AOF
+              appendonly yes
+              appendfsync everysec
+              # 内存策略
+              maxmemory 384mb
+              maxmemory-policy allkeys-lru
+              EOF
+              # 动态写入 cluster-announce-ip 为当前 Pod IP
+              echo "cluster-announce-ip ${POD_IP}" >> /data/redis.conf
+              echo "Redis 配置生成完成, announce-ip: ${POD_IP}"
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+      containers:
+        - name: redis
+          image: registry.cn-hangzhou.aliyuncs.com/library/redis:7.0
+          imagePullPolicy: IfNotPresent
+          command: ["redis-server", "/data/redis.conf"]
+          ports:
+            - name: redis-client
+              containerPort: 6379
+            - name: redis-bus
+              containerPort: 16379
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          # 就绪探针: Redis PING 响应
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-a", "Taiking@5563", "--no-auth-warning", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # 存活探针
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "-a", "Taiking@5563", "--no-auth-warning", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+      volumes:
+        # 单节点环境使用 emptyDir; 多节点扩展后替换为 PVC
+        - name: redis-data
+          emptyDir: {}
+
+---
+# Job: Redis 集群创建任务
+# 说明: 使用 initContainer 等待所有节点就绪, 主容器执行集群创建脚本
+#       该 Job 为一次性任务, 创建完成后自动结束
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-cluster-create
+  namespace: tns-mes-middleware
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: cluster-init
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/part-of: tns-mes
+        app.kubernetes.io/component: cluster-init
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        # initContainer: 等待所有 Redis 节点就绪
+        - name: wait-for-redis
+          image: registry.cn-hangzhou.aliyuncs.com/library/redis:7.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              for i in 0 1 2 3 4 5; do
+                HOST="redis-node-${i}.redis-headless.tns-mes-middleware.svc.cluster.local"
+                until redis-cli -h ${HOST} -p 6379 -a Taiking@5563 --no-auth-warning ping | grep -q PONG; do
+                  echo "等待 redis-node-${i} 就绪..."
+                  sleep 3
+                done
+                echo "redis-node-${i} 已就绪"
+              done
+              echo "所有 Redis 节点已就绪, 准备创建集群..."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+      containers:
+        - name: cluster-create
+          image: registry.cn-hangzhou.aliyuncs.com/library/redis:7.0
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/scripts/create-cluster.sh"]
+          volumeMounts:
+            - name: init-script
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+      volumes:
+        - name: init-script
+          configMap:
+            name: redis-cluster-init-script
+            defaultMode: 0755

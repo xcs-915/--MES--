@@ -1,0 +1,62 @@
+# [架构说明] 当前为单体模式: 后端 tns-mes-server (NodePort 31180) 统一提供前端页面与 API, 不再使用 Gateway/微服务/独立前端 Pod
+# ==============================================================================
+# 00-namespace.yaml
+# TNS-MES Phase 3 高可用部署 - 命名空间定义
+# 说明: 按职责划分命名空间，实现微服务/中间件/可观测性/Ingress 的逻辑隔离
+# ==============================================================================
+
+---
+# 主命名空间: TNS-MES 微服务应用
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tns-mes
+  labels:
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: microservices
+    environment: production
+spec:
+  finalizers:
+    - kubernetes
+
+---
+# 中间件命名空间: Nacos / Redis / RocketMQ / Sentinel / Seata
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tns-mes-middleware
+  labels:
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: middleware
+    environment: production
+spec:
+  finalizers:
+    - kubernetes
+
+---
+# 可观测性命名空间: SkyWalking / Prometheus / Grafana
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tns-mes-observability
+  labels:
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: observability
+    environment: production
+spec:
+  finalizers:
+    - kubernetes
+
+---
+# Ingress Controller 命名空间: Nginx Ingress
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: ingress
+    environment: production
+spec:
+  finalizers:
+    - kubernetes

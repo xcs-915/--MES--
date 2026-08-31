@@ -111,7 +111,7 @@ export async function loadProducts(page) {
         case 'code':
           return `<span class="cell-title">${escVal(v.code)}</span>`;
         case 'name':
-          return `<span class="cell-title">${escVal(v.nameZh)}</span><span class="cell-sub">${escVal(v.nameEn || v.nameAr)}</span>`;
+          return `<span class="cell-title">${escVal(localizedMeta(v, 'name'))}</span><span class="cell-sub">${escVal(v.nameZh || v.nameEn || v.nameAr)}</span>`;
         case 'source':
           return statusPill(v.source || 'SAP');
         case 'sapLastSyncAt':
@@ -152,7 +152,7 @@ export async function openProductDetail(product) {
         return v.grossWeight != null ? `${v.grossWeight} ${v.weightUnit || ''}`.trim() : null;
       case 'netWeight':
         return v.netWeight != null ? `${v.netWeight} ${v.weightUnit || ''}`.trim() : null;
-      case 'name': return v.nameZh;
+      case 'name': return localizedMeta(v, 'name');
       case 'type': return v.productType;
       default: return readPath(v, key);
     }
@@ -239,7 +239,7 @@ export async function openProductDetail(product) {
 
   openDrawer(`${t('products')} · ${value.code}`, t('productSubtitle'), `<div class="drawer-body">${keyInfoCard([
     { label: t('code'), value: value.code, icon: 'package' },
-    { label: t('name'), value: value.nameZh || value.nameEn, icon: 'tag' },
+    { label: t('name'), value: localizedMeta(value, 'name'), icon: 'tag' },
     { label: t('type'), value: value.productType, icon: 'layers' },
     { label: t('specification'), value: value.specification, icon: 'ruler' },
     { label: t('customerPartNumber'), value: value.customerPartNumber, icon: 'hash' },

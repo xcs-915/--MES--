@@ -13,6 +13,7 @@ import { detailGrid, emptyState, statusPill, sectionTitle } from '../components/
 import { openDrawer, closeDrawer } from '../components/drawer.js';
 import { toast } from '../utils/ui.js';
 import { formatDate } from '../utils/format.js';
+import { localizedMeta } from '../utils/format.js';
 
 export function renderMenus() {
   $('#page').innerHTML = pageHead(t('foundation'), t('menuManagement'), t('accessSubtitle'), btn('menu-add', icon('plus') + t('add'), 'primary', 'USER_ADMIN')) + `<div class="panel"><div class="toolbar"><label class="grow"><input id="menu-search" placeholder="${esc(t('search'))}"></label><div class="toolbar-actions">${btn('refresh-data', icon('refresh-cw') + t('refresh'))}</div></div><div id="menu-table"></div></div>`;
@@ -29,7 +30,7 @@ export async function loadMenus() {
       return children.flatMap(v => {
         const indent = depth > 0 ? '│&nbsp;'.repeat(depth) + '├&nbsp;' : '';
         const toggleBtn = v.status === 'ACTIVE' ? btn('menu-toggle', icon('circle-check'), 'ghost', 'USER_ADMIN') : btn('menu-toggle', icon('circle-x'), 'ghost', 'USER_ADMIN');
-        return [`<tr><td class="code">${escVal(v.code)}</td><td>${indent}${escVal(v.nameZh)}<span class="cell-sub">${escVal(v.nameEn || v.nameAr)}</span></td><td class="code">${escVal(v.parentCode || '—')}</td><td class="code">${escVal(v.path || '—')}</td><td class="code">${escVal(v.permissionCode || '—')}</td><td>${escVal(v.sortOrder ?? 0)}</td><td>${statusPill(v.status)}</td><td class="table-actions">${btn('menu-config', icon('settings-2'), 'ghost', 'USER_ADMIN')} ${btn('menu-edit', icon('pencil'), 'ghost', 'USER_ADMIN')} ${toggleBtn} ${btn('menu-delete', icon('trash-2'), 'ghost', 'USER_ADMIN')}</td></tr>`, ...buildMenuRows(items, v.code, depth + 1)];
+        return [`<tr><td class="code">${escVal(v.code)}</td><td>${indent}${escVal(localizedMeta(v, 'name'))}<span class="cell-sub">${escVal(v.nameZh || v.nameEn || v.nameAr)}</span></td><td class="code">${escVal(v.parentCode || '—')}</td><td class="code">${escVal(v.path || '—')}</td><td class="code">${escVal(v.permissionCode || '—')}</td><td>${escVal(v.sortOrder ?? 0)}</td><td>${statusPill(v.status)}</td><td class="table-actions">${btn('menu-config', icon('settings-2'), 'ghost', 'USER_ADMIN')} ${btn('menu-edit', icon('pencil'), 'ghost', 'USER_ADMIN')} ${toggleBtn} ${btn('menu-delete', icon('trash-2'), 'ghost', 'USER_ADMIN')}</td></tr>`, ...buildMenuRows(items, v.code, depth + 1)];
       });
     };
     const rows = buildMenuRows(state.data.menus, null, 0);
@@ -39,7 +40,7 @@ export async function loadMenus() {
 }
 
 function menuParentOptions(selected) {
-  return `<option value="">${t('all')}</option>` + (state.data.menus || []).filter(m => m.status === 'ACTIVE').map(m => `<option value="${esc(m.code)}" ${m.code === selected ? 'selected' : ''}>${esc(m.code)} · ${esc(m.nameZh)}</option>`).join('');
+  return `<option value="">${t('all')}</option>` + (state.data.menus || []).filter(m => m.status === 'ACTIVE').map(m => `<option value="${esc(m.code)}" ${m.code === selected ? 'selected' : ''}>${esc(m.code)} · ${esc(localizedMeta(m, 'name'))}</option>`).join('');
 }
 
 function menuBaseForm(prefix, menu = {}) {

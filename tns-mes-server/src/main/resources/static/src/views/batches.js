@@ -19,9 +19,7 @@ export function renderBatches() {
     filterField('batch-search', t('search'), 'text', null, t('batchNo') + '/' + t('productCode')),
     filterField('batch-status', t('batchStatus'), 'select', [
       { value: 'all', label: t('all') },
-      { value: 'RELEASED', label: 'RELEASED' },
-      { value: 'RESTRICTED', label: 'RESTRICTED' },
-      { value: 'UNREST', label: 'UNREST' }
+      ...['RELEASED','RESTRICTED','UNREST'].map(value => ({ value, label: t('status.' + value) }))
     ]),
     filterField('batch-plant', t('plant'), 'text', null, t('plant'))
   ];
