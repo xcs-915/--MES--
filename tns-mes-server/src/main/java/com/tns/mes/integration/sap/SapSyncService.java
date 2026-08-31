@@ -87,7 +87,7 @@ public class SapSyncService {
         if (query != null) productQuery.putAll(query);
         productQuery.putIfAbsent("$filter", recentChangeFilter("LastChangeDateTime"));
         productQuery.putIfAbsent("$top", properties.getPageSize());
-        productQuery.putIfAbsent("$expand", "to_Description,to_Plant,to_ProductUnitsOfMeasure,to_SalesDelivery,to_Valuation");
+        productQuery.putIfAbsent("$expand", "to_Description,to_BasicText,to_Plant,to_ProductUnitsOfMeasure,to_SalesDelivery,to_Valuation");
         productQuery.putIfAbsent("$select",
                 "Product,ProductOldID,ProductGroup,ProductType,BaseUnit,CrossPlantStatus,CrossPlantStatusValidityDate,"
                 + "CreationDate,CreatedByUser,LastChangeDate,LastChangedByUser,LastChangeDateTime,"
@@ -112,7 +112,14 @@ public class SapSyncService {
                 + "YY1_F_ColorRegion_PRD,YY1_PLM_Package_number_PRD,YY1_ProductType_PRD,"
                 + "YY1_F_ProcessTreatmen_PRD,YY1_F_DescriptionOTP_PRD,YY1_F_Encapsulation_PRD,"
                 + "YY1_F_Project_PRD");
-        List<JsonNode> rows = fetchAllPages(pathOrDefault(path, properties.getProductPath()), productQuery);
+        List<JsonNode> rows;
+        try {
+            rows = fetchAllPages(pathOrDefault(path, properties.getProductPath()), productQuery);
+        } catch (Exception ex) {
+            // Fallback: SAP 可能不支持 to_BasicText 导航属性，移除后重试
+            productQuery.put("$expand", "to_Description,to_Plant,to_ProductUnitsOfMeasure,to_SalesDelivery,to_Valuation");
+            rows = fetchAllPages(pathOrDefault(path, properties.getProductPath()), productQuery);
+        }
         int created = 0, updated = 0, failed = 0;
         List<String> errors = new ArrayList<>();
         for (JsonNode row : rows) {
@@ -125,9 +132,15 @@ public class SapSyncService {
                 if (isNew) product = new Product();
                 product.setCode(code);
                 String expandedDescription = productDescription(row);
-                String nameEn = first(text(row, "nameEn", "NameEn", "description", "Description", "ProductDescription", "MaterialDescription", "materialDescription"), expandedDescription);
-                String nameZh = first(text(row, "nameZh", "NameZh", "DescriptionZh", "ProductDescriptionZh"), expandedDescription);
-                String nameAr = text(row, "nameAr", "NameAr", "DescriptionAr", "ProductDescriptionAr");
+                Map<String, String> langDescs = productDescriptionsByLanguage(row);
+                String descZh = langDescs.get("ZH");
+                String descEn = langDescs.get("EN");
+                String descAr = langDescs.get("AR");
+                String anyDesc = langDescs.values().stream().findFirst().orElse(null);
+                String bestDesc = first(descZh, descEn, anyDesc, expandedDescription);
+                String nameEn = first(text(row, "nameEn", "NameEn", "description", "Description", "ProductDescription", "MaterialDescription", "materialDescription"), descEn, bestDesc);
+                String nameZh = first(text(row, "nameZh", "NameZh", "DescriptionZh", "ProductDescriptionZh"), descZh, bestDesc);
+                String nameAr = first(text(row, "nameAr", "NameAr", "DescriptionAr", "ProductDescriptionAr"), descAr);
                 product.setNameEn(nameEn);
                 product.setNameZh(first(nameZh, nameEn, code));
                 product.setNameAr(nameAr);
@@ -223,8 +236,9 @@ public class SapSyncService {
                 product.setMaximumPackagingWidth(decimal(row, "MaximumPackagingWidth"));
                 product.setMaximumPackagingHeight(decimal(row, "MaximumPackagingHeight"));
                 product.setUnitForMaxPackagingDimensions(text(row, "UnitForMaxPackagingDimensions"));
-                // Extract from to_Description expand
-                String descFromExpand = productDescription(row);
+                // Extract from to_Description and to_BasicText expand
+                Map<String, String> descMap = productDescriptionsByLanguage(row);
+                String descFromExpand = first(descMap.get("ZH"), descMap.get("EN"), descMap.values().stream().findFirst().orElse(null));
                 product.setProductDescription(descFromExpand);
                 // Extract from to_Plant expand
                 JsonNode plantNode = firstChild(row, "to_Plant", "to_PlantData");
@@ -944,15 +958,41 @@ public class SapSyncService {
         return null;
     }
     private String productDescription(JsonNode row) {
+        Map<String, String> descs = productDescriptionsByLanguage(row);
+        return first(descs.get("ZH"), descs.get("EN"), descs.values().stream().findFirst().orElse(null));
+    }
+
+    /**
+     * 从 SAP OData 响应中按语言提取产品描述。
+     * 数据来源:
+     *   1) to_Description → A_ProductDescriptionType.ProductDescription (短描述, MaxLength=40)
+     *   2) to_BasicText   → A_ProductBasicTextType.LongText          (长文本, 无长度限制)
+     * LongText 更详细，优先覆盖 ProductDescription。
+     *
+     * @return Map<LanguageCode, Description>  例如 {"ZH": "产品描述", "EN": "Product Desc"}
+     */
+    private Map<String, String> productDescriptionsByLanguage(JsonNode row) {
+        Map<String, String> result = new LinkedHashMap<>();
+        // 1. 从 to_Description 提取短描述 (ProductDescription)
         List<JsonNode> descriptions = childRows(row, "to_Description");
-        String fallback = null;
-        for (JsonNode description : descriptions) {
-            String value = text(description, "ProductDescription", "Description");
-            if (fallback == null) fallback = value;
-            String language = text(description, "Language");
-            if (language != null && (language.equalsIgnoreCase("ZH") || language.equalsIgnoreCase("EN"))) return value;
+        for (JsonNode desc : descriptions) {
+            String language = text(desc, "Language");
+            String value = text(desc, "ProductDescription", "Description");
+            if (language != null && value != null && !value.trim().isEmpty()) {
+                result.putIfAbsent(language.toUpperCase(), value);
+            }
         }
-        return fallback;
+        // 2. 从 to_BasicText 提取长文本 (LongText)
+        //    LongText 更详细，直接覆盖短描述
+        List<JsonNode> basicTexts = childRows(row, "to_BasicText");
+        for (JsonNode bt : basicTexts) {
+            String language = text(bt, "Language");
+            String value = text(bt, "LongText");
+            if (language != null && value != null && !value.trim().isEmpty()) {
+                result.put(language.toUpperCase(), value);
+            }
+        }
+        return result;
     }
     private String normalizeStatus(String value) { return value == null || value.trim().isEmpty() || "true".equalsIgnoreCase(value) || "1".equals(value) ? "ACTIVE" : ("false".equalsIgnoreCase(value) || "0".equals(value) ? "INACTIVE" : value.toUpperCase()); }
     private String workOrderStatus(JsonNode row) { String value = text(row, "status", "Status", "orderStatus", "OrderStatus", "SystemStatus"); if (bool(row, false, "MfgOrderIsTechnicallyCompleted", "IsTechnicallyCompleted")) return "COMPLETED"; if (value == null && bool(row, false, "MfgOrderIsReleased", "IsReleased")) return "RELEASED"; if (value == null) return "DRAFT"; String v = value.toUpperCase(); if (v.contains("COMPLETE")) return "COMPLETED"; if (v.contains("PROGRESS")) return "IN_PROGRESS"; if (v.contains("RELEASE")) return "RELEASED"; if (v.contains("CANCEL")) return "CANCELLED"; return "DRAFT"; }

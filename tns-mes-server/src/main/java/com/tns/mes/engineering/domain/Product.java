@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "eng_product")
+@Table(name = "product")
 public class Product extends AuditedEntity {
     @Column(nullable = false, unique = true, length = 64)
     private String code;
@@ -93,7 +93,7 @@ public class Product extends AuditedEntity {
     private String productionStorageLocation;
     @Column(name = "default_storage_location", length = 20)
     private String defaultStorageLocation;
-    @Column(name = "product_description", length = 500)
+    @Column(name = "product_description", columnDefinition = "nvarchar(max)")
     private String productDescription;
     @Column(name = "yy1_color_number", length = 25)
     private String yy1ColorNumber;

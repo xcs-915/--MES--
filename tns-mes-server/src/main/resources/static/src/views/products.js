@@ -37,11 +37,33 @@ export function renderProducts() {
   loadProducts();
 }
 
+// 产品类型字典映射 (MATERIAL_TYPE → 中文标签)
+let productTypeMap = {};
+let productTypeMapLoaded = false;
+
+async function ensureProductTypeMap() {
+  if (productTypeMapLoaded) return;
+  try {
+    const resp = await api('/system/dictionaries?type=MATERIAL_TYPE');
+    const items = resp.data || [];
+    items.forEach(item => {
+      productTypeMap[item.dictCode] = item.labelZh || item.labelEn || item.dictCode;
+    });
+    productTypeMapLoaded = true;
+  } catch { productTypeMapLoaded = true; }
+}
+
+function productTypeLabel(code) {
+  return productTypeMap[code] || code || '—';
+}
+
 export async function loadProducts(page) {
   const p = ps('products');
   if (page !== undefined) p.page = page;
   const node = $('#product-table');
   if (!node) return;
+  // 加载产品类型字典映射
+  await ensureProductTypeMap();
   const params = new URLSearchParams();
   params.set('page', p.page);
   params.set('size', p.size);
@@ -69,7 +91,6 @@ export async function loadProducts(page) {
       { key: 'yy1Material', label: t('material'), sortable: true },
       { key: 'minPackagingQty', label: t('minPackagingQty'), sortable: true },
       { key: 'unit', label: t('unit'), sortable: true },
-      { key: 'source', label: t('source'), sortable: false },
       { key: 'sapLastSyncAt', label: t('lastSync'), sortable: true },
       { key: 'actions', label: t('actions'), sortable: false }
     ];
@@ -111,7 +132,9 @@ export async function loadProducts(page) {
         case 'code':
           return `<span class="cell-title">${escVal(v.code)}</span>`;
         case 'name':
-          return `<span class="cell-title">${escVal(localizedMeta(v, 'name'))}</span><span class="cell-sub">${escVal(v.nameZh || v.nameEn || v.nameAr)}</span>`;
+          return `<span class="cell-title">${escVal(v.nameZh || v.nameEn || v.nameAr || v.code)}</span>`;
+        case 'productType':
+          return `<span>${escVal(productTypeLabel(v.productType))}</span>`;
         case 'source':
           return statusPill(v.source || 'SAP');
         case 'sapLastSyncAt':
@@ -153,7 +176,7 @@ export async function openProductDetail(product) {
       case 'netWeight':
         return v.netWeight != null ? `${v.netWeight} ${v.weightUnit || ''}`.trim() : null;
       case 'name': return localizedMeta(v, 'name');
-      case 'type': return v.productType;
+      case 'type': return productTypeLabel(v.productType);
       default: return readPath(v, key);
     }
   };
@@ -240,7 +263,7 @@ export async function openProductDetail(product) {
   openDrawer(`${t('products')} · ${value.code}`, t('productSubtitle'), `<div class="drawer-body">${keyInfoCard([
     { label: t('code'), value: value.code, icon: 'package' },
     { label: t('name'), value: localizedMeta(value, 'name'), icon: 'tag' },
-    { label: t('type'), value: value.productType, icon: 'layers' },
+    { label: t('type'), value: productTypeLabel(value.productType), icon: 'layers' },
     { label: t('specification'), value: value.specification, icon: 'ruler' },
     { label: t('customerPartNumber'), value: value.customerPartNumber, icon: 'hash' },
     { label: t('source'), value: statusPill(value.source || 'SAP'), icon: 'cloud' }

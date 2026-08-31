@@ -661,16 +661,19 @@ a { text-decoration: none; color: inherit; }
 
 /* Form Grid */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.form-grid label { display: flex; flex-direction: column; gap: 4px; }
+.form-grid label { display: flex; flex-direction: column; gap: 4px; align-self: start; }
 .form-grid label.full { grid-column: 1 / -1; }
 .form-grid label span { font-size: 12px; font-weight: 500; color: var(--text); }
 .form-grid input, .form-grid select, .form-grid textarea {
   height: 36px;
+  min-height: 36px;
+  max-height: 36px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
   background: #fff;
   font-size: 13px;
+  flex-shrink: 0;
 }
 .form-grid textarea { height: auto; padding: 8px 10px; resize: vertical; font-family: inherit; }
 .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus {
