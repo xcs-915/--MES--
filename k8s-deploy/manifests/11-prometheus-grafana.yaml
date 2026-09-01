@@ -5,7 +5,7 @@
 # 说明: Prometheus 抓取 K8s 集群 Pod 指标, Grafana 可视化展示
 # 组件:
 #   - prometheus: 抓取/存储时序指标 (端口 9090)
-#   - grafana:    可视化仪表盘 (端口 3000, 默认 admin/Taiking@5563)
+#   - grafana:    可视化仪表盘 (端口 3000, 管理员凭证通过 Secret 注入)
 # 镜像版本:
 #   - prom/prometheus:v2.45.0
 #   - grafana/grafana:10.0.0
@@ -319,13 +319,19 @@ spec:
               cpu: "500m"
               memory: "512Mi"
           env:
-            # 默认管理员账号: admin / Taiking@5563
+            # 管理员凭证通过 Secret 注入
             - name: GF_SECURITY_ADMIN_USER
               value: "admin"
             - name: GF_SECURITY_ADMIN_PASSWORD
-              value: "Taiking@5563"
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: grafana-admin-password
             - name: GF_SECURITY_ADMIN_PASSWORD_CONFIRM
-              value: "Taiking@5563"
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: grafana-admin-password
             # 允许匿名访问仪表盘 (可选)
             - name: GF_AUTH_ANONYMOUS_ENABLED
               value: "false"

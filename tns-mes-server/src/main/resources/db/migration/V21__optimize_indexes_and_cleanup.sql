@@ -113,9 +113,12 @@ IF OBJECT_ID(N'[dbo].[mes_outbox_message]') IS NOT NULL
 -- =====================================================================
 
 -- 3.1 全量更新当前数据库所有表的统计信息
---     说明: 索引新增与数据清理后，更新统计信息可使查询优化器基于最新
---     数据分布选择更优执行计划。sp_updatestats 幂等，可重复执行。
-EXEC sp_updatestats;
+--     说明: sp_updatestats 需要 db_owner/sysadmin 权限，MES 应用用户无权执行。
+--     SQL Server 默认启用自动统计更新(AUTO_UPDATE_STATISTICS)，新增索引后
+--     查询优化器会在首次使用时自动更新统计信息。如需手动更新，请由 DBA 执行:
+--     EXEC sp_updatestats;
+-- UPDATE STATISTICS [dbo].[eng_product];
+-- UPDATE STATISTICS [dbo].[prd_work_order];
 
 
 -- =====================================================================

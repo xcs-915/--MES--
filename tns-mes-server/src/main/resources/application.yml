@@ -64,14 +64,46 @@ mes:
       password: ${MES_SAP_PASSWORD:}
       bearer-token: ${MES_SAP_BEARER_TOKEN:}
       page-size: ${MES_SAP_PAGE_SIZE:200}
+    rocketmq:
+      enabled: ${MES_ROCKETMQ_ENABLED:false}
+      name-server: ${ROCKETMQ_NAMESERVER:}
+      producer-group: ${MES_ROCKETMQ_PRODUCER_GROUP:tns-mes-producer}
+      topic: ${MES_ROCKETMQ_TOPIC:tns-mes-events}
+      send-timeout-ms: ${MES_ROCKETMQ_SEND_TIMEOUT_MS:3000}
+      retry-times: ${MES_ROCKETMQ_RETRY_TIMES:2}
+      poll-interval-ms: ${MES_ROCKETMQ_POLL_INTERVAL_MS:5000}
+      batch-size: ${MES_ROCKETMQ_BATCH_SIZE:50}
+      max-attempts: ${MES_ROCKETMQ_MAX_ATTEMPTS:5}
+    sentinel:
+      enabled: ${MES_SENTINEL_ENABLED:false}
+      dashboard: ${SENTINEL_DASHBOARD:}
+    nacos:
+      enabled: ${MES_NACOS_ENABLED:false}
+      addr: ${NACOS_ADDR:}
+    seata:
+      enabled: ${MES_SEATA_ENABLED:false}
+      addr: ${SEATA_ADDR:}
+
+# 禁用 seata-spring-boot-starter 默认自动配置，避免未启用时尝试连接 Seata Server
+# 当 mes.integration.seata.enabled=true 时由 SeataAutoConfiguration 设置系统属性并激活
+seata:
+  enabled: ${MES_SEATA_ENABLED:false}
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when_authorized
+      group:
+        middleware:
+          include: middleware
+        db:
+          include: db
+  health:
+    redis:
+      enabled: true
 
 ---
 spring:

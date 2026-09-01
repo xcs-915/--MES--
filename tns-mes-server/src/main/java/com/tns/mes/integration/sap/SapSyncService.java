@@ -23,6 +23,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -42,6 +44,7 @@ import java.util.UUID;
 
 @Service
 public class SapSyncService {
+    private static final Logger log = LoggerFactory.getLogger(SapSyncService.class);
     private final ExternalApiClient client;
     private final SapProperties properties;
     private final ObjectMapper mapper;
@@ -61,16 +64,19 @@ public class SapSyncService {
         this.apiCallLogs = apiCallLogs;
     }
 
+    @Transactional
     public SyncResult syncProduct(String code) {
         if (code == null || code.trim().isEmpty()) throw new BizException(4003, "error.validation");
         return syncProducts(null, Collections.<String, Object>singletonMap("$filter", "Product eq '" + code.trim().replace("'", "''") + "'"));
     }
 
+    @Transactional
     public SyncResult syncWorkOrder(String orderNo) {
         if (orderNo == null || orderNo.trim().isEmpty()) throw new BizException(4003, "error.validation");
         return syncWorkOrders(null, Collections.<String, Object>singletonMap("$filter", "ManufacturingOrder eq '" + orderNo.trim().replace("'", "''") + "'"));
     }
 
+    @Transactional
     public SyncResult syncBatch(String batchNo) {
         if (batchNo == null || batchNo.trim().isEmpty()) throw new BizException(4003, "error.validation");
         return syncBatches(null, Collections.<String, Object>singletonMap("$filter", "Batch eq '" + batchNo.trim().replace("'", "''") + "'"));
@@ -421,7 +427,12 @@ public class SapSyncService {
 
                 outbox.enqueue("WORK_ORDER", String.valueOf(saved.getId()), isNew ? "WORK_ORDER_SYNC_CREATED" : "WORK_ORDER_SYNC_UPDATED", mapOf("source", "SAP", "orderNo", orderNo));
                 if (isNew) created++; else updated++;
-            } catch (RuntimeException ex) { failed++; errors.add(orderNo + ": " + ex.getMessage()); }
+            } catch (RuntimeException ex) {
+                failed++;
+                String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                errors.add(orderNo + ": " + message);
+                log.warn("SAP work order sync failed for {}", orderNo, ex);
+            }
         }
         return new SyncResult("WORK_ORDER", allRows.size(), created, updated, failed, errors);
     }
@@ -554,7 +565,9 @@ public class SapSyncService {
             woo.setWorkOrder(order);
             woo.setSequenceNo(seq);
             woo.setStatus("PENDING");
-            woo.setPlannedQuantity(decimal(row, "OpPlannedTotalQuantity", "OpPlannedYieldQuantity"));
+            woo.setPlannedQuantity(firstDecimal(
+                    decimal(row, "OpPlannedTotalQuantity", "OpPlannedYieldQuantity"),
+                    firstDecimal(order.getQuantity(), BigDecimal.ZERO)));
             woo.setCompletedQuantity(firstDecimal(decimal(row, "MfgOrderConfirmedYieldQty"), BigDecimal.ZERO));
             woo.setOperationCode(opCode.trim());
             woo.setOperationName(opName);

@@ -122,7 +122,7 @@ data:
         cluster = "default"
         # Nacos 认证 (如启用)
         username = "nacos"
-        password = "nacos"
+        password = "${NACOS_PASSWORD}"
       }
     }
     config {
@@ -152,7 +152,7 @@ data:
         driverClassName = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
         url = "jdbc:sqlserver://10.30.10.141:1433;databaseName=seata;encrypt=false;trustServerCertificate=true"
         user = "tns_mes_user"
-        password = "Taiking@5563"
+        password = "${SEATA_DB_PASSWORD}"
         minConn = 5
         maxConn = 30
         # 事务存储表 (需提前在 seata 库中创建)
@@ -246,6 +246,16 @@ spec:
             # 指定配置文件路径
             - name: SEATA_CONFIG_NAME
               value: "file:/seata-server/conf/registry"
+            - name: NACOS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: middleware-secrets
+                  key: nacos-password
+            - name: SEATA_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: middleware-secrets
+                  key: seata-db-password
             # JVM 内存参数
             - name: JAVA_OPTS
               value: "-server -Xms256m -Xmx256m -Xmn128m"

@@ -7,9 +7,10 @@
 #   - 单体后端 tns-mes-server 同时承载前端页面与 REST API
 #   - 2 副本高可用, 滚动更新保证零中断 (maxUnavailable: 0)
 #   - 镜像 tns-mes-server:latest, 本地镜像 (imagePullPolicy: Never)
-#   - 数据库 (SQL Server) / Redis / JWT / 管理员密码 / SAP 连接通过环境变量注入
-#   - 就绪探针: /tns-mes/actuator/health (初始延迟 60 秒)
-#   - 存活探针: /tns-mes/actuator/health (初始延迟 120 秒)
+#   - 数据库/Redis/JWT/管理员/SAP 凭证通过 K8s Secret + envFrom 注入
+#   - 中间件功能开关 (RocketMQ/Sentinel/Nacos/Seata) 默认关闭, 按需开启
+#   - 三级探针: startup → readiness → liveness (避免慢启动误杀)
+#   - Prometheus 监控注解: /tns-mes/actuator/prometheus
 #   - 对外暴露: NodePort 31180, 集群内通过 tns-mes-backend-svc:8080 访问
 # ==============================================================================
 ---
@@ -24,16 +25,23 @@ metadata:
     component: backend
     tier: backend
     architecture: monolithic
-    version: v1
+    version: v2
+  annotations:
+    # Prometheus 监控: 由 Service Monitor 或 Pod 注解发现
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/tns-mes/actuator/prometheus"
 spec:
   # 高可用: 2 副本
   replicas: 2
-  # 滚动更新: 逐个替换, 保证可用性
+  # 滚动更新: 先启动新 Pod 再下旧 Pod, 保证零中断
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
+  # 修订历史: 保留 5 个旧版本便于回滚
+  revisionHistoryLimit: 5
   selector:
     matchLabels:
       app: tns-mes-backend
@@ -44,51 +52,97 @@ spec:
         component: backend
         tier: backend
         architecture: monolithic
-        version: v1
+        version: v2
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/tns-mes/actuator/prometheus"
     spec:
+      initContainers:
+        - name: skywalking-agent
+          image: apache/skywalking-java-agent:9.7.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - cp -R /skywalking/agent/* /opt/skywalking/
+          volumeMounts:
+            - name: skywalking-agent
+              mountPath: /opt/skywalking
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "50m"
+              memory: "128Mi"
       containers:
         - name: tns-mes-server
           # 本地构建镜像, 不从远程仓库拉取
-          image: tns-mes-server:latest
+          image: tns-mes-server:v23fix
           imagePullPolicy: Never
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-          # 资源限制: 请求 768Mi/300m, 限制 1536Mi/1500m
+          # 资源限制: 请求 512Mi/500m, 限制 2048Mi/2000m
+          # 单体后端需要足够内存应对 SAP OData 解析 + Redis 缓存 + Flyway 迁移
           resources:
             requests:
-              cpu: "300m"
-              memory: "768Mi"
+              cpu: "500m"
+              memory: "512Mi"
             limits:
-              cpu: "1500m"
-              memory: "1536Mi"
+              cpu: "2000m"
+              memory: "2048Mi"
+          envFrom:
+            # 统一引用 ConfigMap 中所有非敏感配置 (DB URL, Redis, SAP, 中间件开关等)
+            - configMapRef:
+                name: tns-mes-config
           env:
             # ---------- Spring 环境 ----------
             - name: SPRING_PROFILES_ACTIVE
               value: "prod"
-            # ---------- 数据库 (SQL Server 2019) ----------
-            - name: MES_DB_URL
-              value: "jdbc:sqlserver://<DB_HOST>:1433;databaseName=tns_mes;encrypt=false;trustServerCertificate=true"
-            - name: MES_DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: tns-mes-secrets
-                  key: db-username
+            # ---------- 数据库凭证 (Secret) ----------
             - name: MES_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: tns-mes-secrets
                   key: db-password
-            # ---------- Redis 缓存 ----------
+            # ---------- Redis 密码 (Secret) ----------
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: redis-password
+            # ---------- Spring Boot Redis Relaxed Binding ----------
+            # 直接通过环境变量设置 Spring 属性, 不依赖 YAML 占位符解析
             - name: SPRING_DATA_REDIS_HOST
               value: "redis-svc.tns-mes-middleware"
             - name: SPRING_DATA_REDIS_PORT
               value: "6379"
-            # 关闭 Redis 健康检查 (单体模式不依赖 Redis 健康状态决定就绪)
-            - name: MANAGEMENT_HEALTH_REDIS_ENABLED
-              value: "false"
-            # ---------- JWT 密钥与管理员账号 ----------
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: redis-password
+            - name: SPRING_DATA_REDIS_TIMEOUT
+              value: "3s"
+            - name: SPRING_DATA_REDIS_CONNECT_TIMEOUT
+              value: "3s"
+            - name: SPRING_DATA_REDIS_CLUSTER_NODES
+              value: "redis-node-0.redis-headless.tns-mes-middleware.svc.cluster.local:6379,redis-node-1.redis-headless.tns-mes-middleware.svc.cluster.local:6379,redis-node-2.redis-headless.tns-mes-middleware.svc.cluster.local:6379,redis-node-3.redis-headless.tns-mes-middleware.svc.cluster.local:6379,redis-node-4.redis-headless.tns-mes-middleware.svc.cluster.local:6379,redis-node-5.redis-headless.tns-mes-middleware.svc.cluster.local:6379"
+            - name: SPRING_DATA_REDIS_CLUSTER_MAX_REDIRECTS
+              value: "5"
+            # 旧式兼容 (spring.redis.* → spring.data.redis.*)
+            - name: SPRING_REDIS_HOST
+              value: "redis-svc.tns-mes-middleware"
+            - name: SPRING_REDIS_PORT
+              value: "6379"
+            - name: SPRING_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: redis-password
+            # ---------- JWT 密钥与管理员账号 (Secret) ----------
             - name: MES_JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -98,43 +152,87 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: tns-mes-secrets
-                  key: admin-password
-            # ---------- SAP S/4HANA 接口 (引用 01-config-secrets.yaml 全局配置) ----------
-            - name: SAP_BASE_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: tns-mes-config
-                  key: SAP_BASE_URL
-            - name: SAP_USERNAME
-              valueFrom:
-                configMapKeyRef:
-                  name: tns-mes-config
-                  key: SAP_USERNAME
-            - name: SAP_PASSWORD
+                  key: bootstrap-admin-password
+            # ---------- SAP S/4HANA 密码 (Secret) ----------
+            - name: MES_SAP_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: tns-mes-secrets
                   key: sap-password
-          # 就绪探针: Actuator 健康检查, 初始延迟 60 秒
+            - name: MES_NACOS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: nacos-password
+            # ---------- SkyWalking Java Agent ----------
+            - name: SW_AGENT_NAME
+              value: "tns-mes-server"
+            - name: SW_AGENT_COLLECTOR_BACKEND_SERVICES
+              value: "skywalking-oap.tns-mes-observability:11800"
+            # ---------- JVM 参数 (优化容器内存) ----------
+            - name: JAVA_OPTS
+              value: >-
+                -javaagent:/opt/skywalking/skywalking-agent.jar
+                -XX:+UseG1GC
+                -XX:MaxRAMPercentage=75
+                -XX:InitialRAMPercentage=50
+                -XX:+HeapDumpOnOutOfMemoryError
+                -XX:HeapDumpPath=/tmp/heapdump
+                -Dfile.encoding=UTF-8
+                -Duser.timezone=UTC
+                -Dserver.tomcat.max-threads=200
+                -Dserver.tomcat.accept-count=100
+          # 启动探针: 给 Spring Boot 足够启动时间 (Flyway 迁移 + Bean 初始化)
+          # 失败前允许 300 秒 (30 次 × 10 秒)
+          startupProbe:
+            httpGet:
+              path: /tns-mes/actuator/health
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          # 就绪探针: 启动后每 10 秒检查, 3 次失败标记为不就绪
           readinessProbe:
             httpGet:
               path: /tns-mes/actuator/health
               port: 8080
-            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-          # 存活探针: Actuator 健康检查, 初始延迟 120 秒
+          # 存活探针: 每 20 秒检查, 5 次失败重启 Pod
           livenessProbe:
             httpGet:
               path: /tns-mes/actuator/health
               port: 8080
-            initialDelaySeconds: 120
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 5
-          # 优雅终止: 给后端足够时间处理完在途请求并下线
-          terminationGracePeriodSeconds: 60
+          # 优雅终止: 给后端 60 秒处理在途请求并下线
+          # 安全上下文: 非 root 用户运行
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: skywalking-agent
+              mountPath: /opt/skywalking
+              readOnly: true
+      # 优雅终止: 给后端 60 秒处理在途请求并下线
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: skywalking-agent
+          emptyDir: {}
+      # 亲和性: 两个副本尽量调度到不同节点
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: tns-mes-backend
+                topologyKey: kubernetes.io/hostname
 ---
 # ---------- 单体后端 Service (NodePort 31180) ----------
 apiVersion: v1
@@ -172,3 +270,34 @@ spec:
   selector:
     matchLabels:
       app: tns-mes-backend
+---
+# ---------- HPA: 自动伸缩 (基于 CPU 利用率) ----------
+# 当 CPU 平均利用率超过 80% 时自动扩容 (最多 4 副本)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tns-mes-backend-hpa
+  namespace: tns-mes
+  labels:
+    app: tns-mes-backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tns-mes-backend
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60

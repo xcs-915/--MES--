@@ -28,7 +28,7 @@ public class JpaConfig {
         };
     }
 
-    @Bean(name = "applicationTaskExecutor")
+    @Bean(name = {"applicationTaskExecutor", "taskExecutor"})
     public Executor applicationTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(4);
@@ -39,4 +39,3 @@ public class JpaConfig {
         return executor;
     }
 }
-

@@ -76,6 +76,7 @@ echo ""
 # ====== Step 2: 创建配置和密钥 ======
 log "Step 2: 创建 ConfigMap 和 Secret..."
 kubectl apply -f "${MANIFEST_DIR}/01-config-secrets.yaml"
+kubectl apply -f "${MANIFEST_DIR}/01-platform-secrets.yaml"
 ok "配置和密钥创建完成"
 echo ""
 
@@ -119,39 +120,11 @@ kubectl wait --for=condition=Ready pod -l app=skywalking-oap -n tns-mes-observab
 ok "可观测层部署完成"
 echo ""
 
-# ====== Step 8: 部署前端 Nginx 配置 ======
-log "Step 8: 部署前端 Nginx 配置..."
-kubectl apply -f "${MANIFEST_DIR}/12-frontend-nginx-config.yaml"
-ok "前端 Nginx 配置完成"
-echo ""
-
-# ====== Step 9: 部署微服务 ======
-log "Step 9: 部署微服务 (6 服务 × 2 副本)..."
-kubectl apply -f "${MANIFEST_DIR}/07-microservices.yaml"
-log "等待微服务 Pod 就绪 (可能需要 2-5 分钟)..."
-kubectl wait --for=condition=Ready pod -l app=tns-auth-service -n tns-mes --timeout=300s || warn "Auth Service 启动中..."
-kubectl wait --for=condition=Ready pod -l app=tns-product-service -n tns-mes --timeout=300s || warn "Product Service 启动中..."
-ok "微服务部署完成"
-echo ""
-
-# ====== Step 10: 部署网关 ======
-log "Step 10: 部署 SpringCloud Gateway..."
-kubectl apply -f "${MANIFEST_DIR}/06-gateway.yaml"
-kubectl wait --for=condition=Ready pod -l app=sc-gateway -n tns-mes --timeout=180s || warn "Gateway 启动中..."
-ok "网关部署完成"
-echo ""
-
-# ====== Step 11: 部署前端 ======
-log "Step 11: 部署 Vue3 前端..."
-kubectl apply -f "${MANIFEST_DIR}/08-frontend.yaml"
-kubectl wait --for=condition=Ready pod -l app=tns-frontend -n tns-mes --timeout=120s || warn "Frontend 启动中..."
-ok "前端部署完成"
-echo ""
-
-# ====== Step 12: 部署 Ingress ======
-log "Step 12: 部署 Nginx Ingress 路由..."
-kubectl apply -f "${MANIFEST_DIR}/09-ingress.yaml"
-ok "Ingress 路由部署完成"
+# ====== Step 8: 部署模块化单体后端 ======
+log "Step 8: 部署 TNS-MES 模块化单体后端..."
+kubectl apply -f "${MANIFEST_DIR}/12-backend-deploy.yaml"
+kubectl rollout status deployment/tns-mes-backend -n tns-mes --timeout=300s
+ok "模块化单体后端部署完成"
 echo ""
 
 # ====== 部署完成汇总 ======
@@ -161,18 +134,17 @@ echo -e "${GREEN}  TNS-MES Phase 3 部署完成!${NC}"
 echo "================================================"
 echo ""
 echo "访问地址:"
-echo "  前端:        http://10.30.10.140/"
-echo "  API 网关:    http://10.30.10.140:31080/"
-echo "  Nacos:       http://10.30.10.140:8848/nacos"
-echo "  Sentinel:    http://10.30.10.140:8080/"
-echo "  SkyWalking:  http://10.30.10.140:8080/"
-echo "  Grafana:     http://10.30.10.140:3000/ (admin / Taiking@5563)"
-echo "  Prometheus:  http://10.30.10.140:9090/"
+echo "  MES 应用:     http://10.30.10.140:31180/tns-mes/"
+echo "  Nacos:        通过集群内 nacos-svc:8848 访问"
+echo "  Sentinel:     通过集群内 sentinel-dashboard:8080 访问"
+echo "  SkyWalking:   通过集群内 skywalking-ui-svc:8080 访问"
+echo "  Grafana:      通过集群内 grafana-svc:3000 访问"
+echo "  Prometheus:   通过集群内 prometheus-svc:9090 访问"
 echo ""
 echo "数据库:"
 echo "  SQL Server:  10.30.10.141:1433"
 echo "  数据库:      tns_mes"
-echo "  用户:        tns_mes_user / Taiking@5563"
+echo "  用户:        由 K8s Secret 注入"
 echo ""
 echo "SAP 正式环境:"
 echo "  Base URL:    https://my200725.s4hana.sapcloud.cn"

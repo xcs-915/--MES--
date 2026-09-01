@@ -328,9 +328,26 @@ spec:
         - name: config-template
           configMap:
             name: rocketmq-broker-config
-        - name: broker-data
-          emptyDir: {}
         - name: broker-logs
           emptyDir: {}
-        - name: broker-store
-          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: broker-data
+        labels:
+          app.kubernetes.io/name: rocketmq-broker
+          app.kubernetes.io/part-of: tns-mes
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+    - metadata:
+        name: broker-store
+        labels:
+          app.kubernetes.io/name: rocketmq-broker
+          app.kubernetes.io/part-of: tns-mes
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

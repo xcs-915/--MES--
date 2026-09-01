@@ -1,0 +1,48 @@
+# ==============================================================================
+# 01-config-only.yaml - 仅 ConfigMap (不覆盖现有 Secret)
+# 更新环境变量命名: DB_URL → MES_DB_URL, SAP_BASE_URL → MES_SAP_BASE_URL 等
+# 新增中间件功能开关
+# ==============================================================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tns-mes-config
+  namespace: tns-mes
+  labels:
+    app.kubernetes.io/part-of: tns-mes
+    app.kubernetes.io/component: configuration
+data:
+  # --- 数据库 (非敏感部分, 密码在 Secret) ---
+  MES_DB_URL: "jdbc:sqlserver://10.30.10.141:1433;databaseName=tns_mes;encrypt=false;trustServerCertificate=true"
+  MES_DB_USERNAME: "tns_mes_user"
+
+  # --- Redis (非敏感部分, 密码在 Secret) ---
+  REDIS_HOST: "redis-svc.tns-mes-middleware"
+  REDIS_PORT: "6379"
+
+  # --- SAP S/4HANA (URL 非敏感, 用户名非敏感, 密码在 Secret) ---
+  MES_SAP_BASE_URL: "https://my200725.s4hana.sapcloud.cn"
+  MES_SAP_USERNAME: "MES_P"
+
+  # --- 中间件地址 (非敏感) ---
+  ROCKETMQ_NAMESERVER: "rocketmq-namesrv-svc.tns-mes-middleware:9876"
+  NACOS_ADDR: "nacos-svc.tns-mes-middleware:8848"
+  SENTINEL_DASHBOARD: "sentinel-dashboard.tns-mes-middleware:8080"
+  SEATA_ADDR: "seata-server.tns-mes-middleware:8091"
+
+  # --- 中间件功能开关 (默认关闭, 按需开启) ---
+  MES_ROCKETMQ_ENABLED: "true"
+  MES_SENTINEL_ENABLED: "true"
+  MES_NACOS_ENABLED: "true"
+  MES_SEATA_ENABLED: "true"
+  MES_NACOS_USERNAME: "nacos"
+
+  # --- SAP 同步开关 ---
+  MES_SAP_SCHEDULE_ENABLED: "false"
+
+  # --- Spring Profile ---
+  SPRING_PROFILES_ACTIVE: "prod"
+
+  # --- 可观测性 ---
+  SKYWALKING_OAP: "skywalking-oap.tns-mes-observability:11800"

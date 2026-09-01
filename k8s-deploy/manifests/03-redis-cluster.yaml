@@ -24,7 +24,7 @@ data:
     echo "等待所有 Redis 节点启动..."
     for i in 0 1 2 3 4 5; do
       HOST="redis-node-${i}.redis-headless.tns-mes-middleware.svc.cluster.local"
-      until redis-cli -h ${HOST} -p 6379 -a Taiking@5563 --no-auth-warning ping | grep -q PONG; do
+      until redis-cli -h ${HOST} -p 6379 -a "${REDIS_PASSWORD}" --no-auth-warning ping | grep -q PONG; do
         echo "等待 redis-node-${i} 就绪..."
         sleep 3
       done
@@ -39,12 +39,12 @@ data:
       redis-node-4.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
       redis-node-5.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
       --cluster-replicas 1 \
-      -a Taiking@5563 --no-auth-warning \
+      -a "${REDIS_PASSWORD}" --no-auth-warning \
       --cluster-yes
     echo "Redis 集群创建完成!"
     redis-cli --cluster check \
       redis-node-0.redis-headless.tns-mes-middleware.svc.cluster.local:6379 \
-      -a Taiking@5563 --no-auth-warning
+      -a "${REDIS_PASSWORD}" --no-auth-warning
 
 ---
 # Headless Service: Redis 节点稳定 DNS
@@ -142,14 +142,14 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              cat > /data/redis.conf <<'EOF'
+              cat > /data/redis.conf <<EOF
               # Redis 集群配置
               bind 0.0.0.0
               port 6379
               protected-mode yes
               # 密码认证
-              requirepass Taiking@5563
-              masterauth Taiking@5563
+              requirepass ${REDIS_PASSWORD}
+              masterauth ${REDIS_PASSWORD}
               # 集群模式
               cluster-enabled yes
               cluster-config-file nodes.conf
@@ -167,6 +167,11 @@ spec:
               echo "cluster-announce-ip ${POD_IP}" >> /data/redis.conf
               echo "Redis 配置生成完成, announce-ip: ${POD_IP}"
           env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: middleware-secrets
+                  key: redis-password
             - name: POD_IP
               valueFrom:
                 fieldRef:
@@ -192,6 +197,11 @@ spec:
             - name: redis-bus
               containerPort: 16379
           env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: middleware-secrets
+                  key: redis-password
             - name: POD_IP
               valueFrom:
                 fieldRef:
@@ -209,21 +219,28 @@ spec:
           # 就绪探针: Redis PING 响应
           readinessProbe:
             exec:
-              command: ["redis-cli", "-a", "Taiking@5563", "--no-auth-warning", "ping"]
+              command: ["sh", "-c", "redis-cli -a \"${REDIS_PASSWORD}\" --no-auth-warning ping"]
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
           # 存活探针
           livenessProbe:
             exec:
-              command: ["redis-cli", "-a", "Taiking@5563", "--no-auth-warning", "ping"]
+              command: ["sh", "-c", "redis-cli -a \"${REDIS_PASSWORD}\" --no-auth-warning ping"]
             initialDelaySeconds: 15
             periodSeconds: 15
             timeoutSeconds: 5
-      volumes:
-        # 单节点环境使用 emptyDir; 多节点扩展后替换为 PVC
-        - name: redis-data
-          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+        labels:
+          app.kubernetes.io/name: redis
+          app.kubernetes.io/part-of: tns-mes
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
 
 ---
 # Job: Redis 集群创建任务
@@ -254,11 +271,17 @@ spec:
           image: registry.cn-hangzhou.aliyuncs.com/library/redis:7.0
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-c"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: middleware-secrets
+                  key: redis-password
           args:
             - |
               for i in 0 1 2 3 4 5; do
                 HOST="redis-node-${i}.redis-headless.tns-mes-middleware.svc.cluster.local"
-                until redis-cli -h ${HOST} -p 6379 -a Taiking@5563 --no-auth-warning ping | grep -q PONG; do
+                until redis-cli -h ${HOST} -p 6379 -a "${REDIS_PASSWORD}" --no-auth-warning ping | grep -q PONG; do
                   echo "等待 redis-node-${i} 就绪..."
                   sleep 3
                 done
@@ -277,6 +300,12 @@ spec:
           image: registry.cn-hangzhou.aliyuncs.com/library/redis:7.0
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/scripts/create-cluster.sh"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: middleware-secrets
+                  key: redis-password
           volumeMounts:
             - name: init-script
               mountPath: /scripts

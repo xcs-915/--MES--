@@ -24,7 +24,7 @@ data:
     db.num=1
     db.url.0=jdbc:sqlserver://10.30.10.141:1433;databaseName=nacos_config;encrypt=false;trustServerCertificate=true;SelectMethod=cursor
     db.user.0=tns_mes_user
-    db.password.0=Taiking@5563
+    db.password.0=${NACOS_DB_PASSWORD}
     # 连接池配置
     db.pool.config.connectionTimeout=30000
     db.pool.config.maxLifetime=60000
@@ -172,6 +172,16 @@ spec:
             # 嵌入式数据存储关闭, 使用外部 SQL Server
             - name: NACOS_AUTH_ENABLE
               value: "true"
+            - name: NACOS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: middleware-secrets
+                  key: nacos-db-password
+            - name: NACOS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: middleware-secrets
+                  key: nacos-password
           resources:
             requests:
               cpu: "250m"
