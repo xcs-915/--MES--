@@ -60,7 +60,7 @@ spec:
     spec:
       initContainers:
         - name: skywalking-agent
-          image: apache/skywalking-java-agent:9.7.0
+          image: apache/skywalking-java-agent:9.3.0-java17
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:
@@ -78,7 +78,7 @@ spec:
       containers:
         - name: tns-mes-server
           # 本地构建镜像, 不从远程仓库拉取
-          image: tns-mes-server:v23fix
+          image: tns-mes-server:v30
           imagePullPolicy: Never
           ports:
             - name: http
@@ -182,6 +182,8 @@ spec:
                 -Duser.timezone=UTC
                 -Dserver.tomcat.max-threads=200
                 -Dserver.tomcat.accept-count=100
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Dcsp.sentinel.log.dir=/tmp"
           # 启动探针: 给 Spring Boot 足够启动时间 (Flyway 迁移 + Bean 初始化)
           # 失败前允许 300 秒 (30 次 × 10 秒)
           startupProbe:

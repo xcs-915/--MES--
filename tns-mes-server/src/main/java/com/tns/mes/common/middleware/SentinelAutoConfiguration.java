@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Configuration;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.util.Collections;
+import java.io.File;
 
 /**
  * Sentinel 流控自动配置。
@@ -80,6 +81,17 @@ public class SentinelAutoConfiguration {
     @PostConstruct
     public void init() {
         try {
+            // Sentinel 1.8.x writes JUL files during static initialization. In a
+            // non-root container the default working-directory path can be
+            // unwritable and trigger an internal NPE, so prepare an explicit
+            // writable directory before the first Sentinel class is initialized.
+            String logDir = System.getProperty("csp.sentinel.log.dir", "/tmp/sentinel-log");
+            File directory = new File(logDir);
+            if (!directory.exists() && !directory.mkdirs()) {
+                log.warn("Unable to create Sentinel log directory: {}", logDir);
+            }
+            System.setProperty("csp.sentinel.log.dir", directory.getAbsolutePath());
+
             // 设置应用名（系统属性），必须在 SentinelConfig 类加载前完成。
             // SentinelConfig.PROJECT_NAME_PROP_KEY 是 static final String 编译期常量，
             // 访问它不会触发 SentinelConfig 类初始化。

@@ -47,7 +47,9 @@ public class SecurityConfig {
                 .cors().and()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
                 .authorizeRequests()
-                .antMatchers("/", "/index.html", "/app.css", "/app.js", "/src/**", "/vendor/**", "/assets/**", "/favicon.ico", "/api/v1/auth/login", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                // Health and metrics are scraped by Kubernetes/Prometheus without a user JWT.
+                // Keep the rest of Actuator protected to avoid exposing operational endpoints.
+                .antMatchers("/", "/index.html", "/app.css", "/app.js", "/src/**", "/vendor/**", "/assets/**", "/favicon.ico", "/api/v1/auth/login", "/actuator/health", "/actuator/prometheus", "/tns-mes/actuator/health", "/tns-mes/actuator/prometheus", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .anyRequest().authenticated().and()
                 .exceptionHandling()
                 .authenticationEntryPoint((request, response, exception) -> {
