@@ -109,7 +109,13 @@ public class SapIntegrationController {
         Map<String,Object> effectiveQuery(String changedField) {
             Map<String,Object> result = new java.util.HashMap<>(query == null ? Collections.emptyMap() : query);
             if (!result.containsKey("$filter")) {
-                int window = minutes == null ? 15 : Math.max(1, Math.min(minutes, 1440));
+                int window = minutes == null ? 15 : minutes;
+                if (window <= 0) {
+                    // minutes <= 0 means full sync — use epoch date to match all records
+                    result.put("$filter", changedField + " ge datetimeoffset'1970-01-01T00:00:00Z'");
+                    return result;
+                }
+                window = Math.min(window, 525600); // cap at 1 year
                 // SAP time is UTC; subtract 8 hours to align with China timezone (UTC+8)
                 String since = OffsetDateTime.now(ZoneOffset.UTC).minus(window, ChronoUnit.MINUTES).minusHours(8)
                         .truncatedTo(ChronoUnit.SECONDS).toString();

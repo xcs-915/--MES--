@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 public class Product extends AuditedEntity {
     @Column(nullable = false, unique = true, length = 64)
     private String code;
+    @Column(name = "name", length = 200)
+    private String name;
     @Column(name = "name_zh", nullable = false, length = 200)
     private String nameZh;
     @Column(name = "name_en", length = 200)
@@ -95,6 +97,8 @@ public class Product extends AuditedEntity {
     private String defaultStorageLocation;
     @Column(name = "product_description", columnDefinition = "nvarchar(max)")
     private String productDescription;
+    @Column(length = 500)
+    private String remark;
     @Column(name = "yy1_color_number", length = 25)
     private String yy1ColorNumber;
     @Column(name = "yy1_fifo_prosign", length = 18)
@@ -226,6 +230,8 @@ public class Product extends AuditedEntity {
 
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public String getNameZh() { return nameZh; }
     public void setNameZh(String nameZh) { this.nameZh = nameZh; }
     public String getNameEn() { return nameEn; }
@@ -308,6 +314,8 @@ public class Product extends AuditedEntity {
     public void setDefaultStorageLocation(String defaultStorageLocation) { this.defaultStorageLocation = defaultStorageLocation; }
     public String getProductDescription() { return productDescription; }
     public void setProductDescription(String productDescription) { this.productDescription = productDescription; }
+    public String getRemark() { return remark; }
+    public void setRemark(String remark) { this.remark = remark; }
     public String getYy1ColorNumber() { return yy1ColorNumber; }
     public void setYy1ColorNumber(String yy1ColorNumber) { this.yy1ColorNumber = yy1ColorNumber; }
     public String getYy1FifoProsign() { return yy1FifoProsign; }

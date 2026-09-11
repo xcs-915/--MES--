@@ -54,7 +54,7 @@ mes:
       schedule:
         initial-delay-ms: ${MES_SAP_SYNC_INITIAL_DELAY_MS:60000}
         fixed-delay-ms: ${MES_SAP_SYNC_FIXED_DELAY_MS:900000}
-      base-url: ${MES_SAP_BASE_URL:https://my200725.s4hana.sapcloud.cn}
+      base-url: ${MES_SAP_BASE_URL:https://my200683.s4hana.sapcloud.cn}
       product-path: ${MES_SAP_PRODUCT_PATH:/sap/opu/odata/sap/API_PRODUCT_SRV/A_Product}
       work-order-path: ${MES_SAP_WORK_ORDER_PATH:/sap/opu/odata/sap/API_PRODUCTION_ORDER_2_SRV/A_ProductionOrder_2}
       batch-path: ${MES_SAP_BATCH_PATH:/sap/opu/odata/sap/API_BATCH_SRV/Batch}

@@ -27,6 +27,7 @@ public class ProductService {
             String term = "%" + keyword.trim().toLowerCase() + "%";
             spec = spec.and((root, query, cb) -> cb.or(
                     cb.like(cb.lower(root.get("code")), term),
+                    cb.like(cb.lower(root.get("name")), term),
                     cb.like(cb.lower(root.get("nameZh")), term),
                     cb.like(cb.lower(root.get("nameEn")), term),
                     cb.like(cb.lower(root.get("specification")), term)));
@@ -76,6 +77,7 @@ public class ProductService {
 
     private void apply(Product product, ProductRequest request) {
         product.setCode(request.getCode().trim());
+        product.setName(request.getName());
         product.setNameZh(request.getNameZh().trim());
         product.setNameEn(request.getNameEn());
         product.setNameAr(request.getNameAr());
@@ -105,10 +107,12 @@ public class ProductService {
         product.setProductModel(request.getProductModel());
         product.setDrawingNumber(request.getDrawingNumber());
         product.setMinPackagingQty(request.getMinPackagingQty());
+        product.setRemark(request.getRemark());
     }
 
     public static class ProductRequest {
         @javax.validation.constraints.NotBlank private String code;
+        private String name;
         @javax.validation.constraints.NotBlank private String nameZh;
         private String nameEn;
         private String nameAr;
@@ -138,8 +142,11 @@ public class ProductService {
         private String productModel;
         private String drawingNumber;
         private java.math.BigDecimal minPackagingQty;
+        private String remark;
         public String getCode() { return code; }
         public void setCode(String code) { this.code = code; }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
         public String getNameZh() { return nameZh; }
         public void setNameZh(String nameZh) { this.nameZh = nameZh; }
         public String getNameEn() { return nameEn; }
@@ -198,5 +205,7 @@ public class ProductService {
         public void setDrawingNumber(String drawingNumber) { this.drawingNumber = drawingNumber; }
         public java.math.BigDecimal getMinPackagingQty() { return minPackagingQty; }
         public void setMinPackagingQty(java.math.BigDecimal minPackagingQty) { this.minPackagingQty = minPackagingQty; }
+        public String getRemark() { return remark; }
+        public void setRemark(String remark) { this.remark = remark; }
     }
 }

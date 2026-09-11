@@ -85,9 +85,9 @@ export async function runSync(kind, trigger) {
   trigger.innerHTML = icon('loader-circle') + t('run') + '…';
   try {
     const endpoint = syncEndpoint(kind);
-    const data = await api(`/integrations/sap/${endpoint}/sync`, { method: 'POST', body: { minutes: 15 } });
+    const data = await api(`/integrations/sap/${endpoint}/sync`, { method: 'POST', body: { minutes: 0 } });
     const v = data.data || {};
-    renderSyncResult(v, formatDate(new Date()) + ' · 15 min');
+    renderSyncResult(v, formatDate(new Date()) + ' · ' + t('all'));
     toast(`${t('saved')} · ${v.received || 0} ${t('received')}`);
     // Refresh whatever list view (products/orders/batches) happens to be visible.
     if (['products', 'orders', 'batches'].includes(state.view)) reloadCurrentView();

@@ -84,6 +84,11 @@ public class SapSyncService {
 
     public ExternalApiClient.ExternalApiResponse request(HttpMethod method, String path, Map<String, ?> query, Object body) {
         requireEnabled();
+        log.info("[SAP-REQ] baseUrl={}, path={}, method={}, query={}", properties.getBaseUrl(), path, method, query);
+        log.info("[SAP-REQ] username={}, passwordLen={}, bearerToken={}",
+                properties.getUsername(),
+                properties.getPassword() == null ? "null" : properties.getPassword().length(),
+                properties.getBearerToken() == null ? "null" : (properties.getBearerToken().isEmpty() ? "empty" : "set"));
         return client.execute(properties.getBaseUrl(), path, method, authHeaders(), query, body);
     }
 
@@ -93,7 +98,7 @@ public class SapSyncService {
         if (query != null) productQuery.putAll(query);
         productQuery.putIfAbsent("$filter", recentChangeFilter("LastChangeDateTime"));
         productQuery.putIfAbsent("$top", properties.getPageSize());
-        productQuery.putIfAbsent("$expand", "to_Description,to_BasicText,to_Plant,to_ProductUnitsOfMeasure,to_SalesDelivery,to_Valuation");
+        productQuery.putIfAbsent("$expand", "to_Description,to_ProductBasicText,to_Plant,to_ProductUnitsOfMeasure,to_SalesDelivery,to_Valuation");
         productQuery.putIfAbsent("$select",
                 "Product,ProductOldID,ProductGroup,ProductType,BaseUnit,CrossPlantStatus,CrossPlantStatusValidityDate,"
                 + "CreationDate,CreatedByUser,LastChangeDate,LastChangedByUser,LastChangeDateTime,"
@@ -122,7 +127,7 @@ public class SapSyncService {
         try {
             rows = fetchAllPages(pathOrDefault(path, properties.getProductPath()), productQuery);
         } catch (Exception ex) {
-            // Fallback: SAP 可能不支持 to_BasicText 导航属性，移除后重试
+            log.warn("[SAP-SYNC] Product expand failed, retrying without to_ProductBasicText: {}", ex.getMessage());
             productQuery.put("$expand", "to_Description,to_Plant,to_ProductUnitsOfMeasure,to_SalesDelivery,to_Valuation");
             rows = fetchAllPages(pathOrDefault(path, properties.getProductPath()), productQuery);
         }
@@ -150,6 +155,7 @@ public class SapSyncService {
                 product.setNameEn(nameEn);
                 product.setNameZh(first(nameZh, nameEn, code));
                 product.setNameAr(nameAr);
+                product.setName(first(bestDesc, nameZh, nameEn, code));
                 product.setProductType(first(text(row, "productType", "ProductType", "materialType", "MaterialType"), "FINISHED"));
                 product.setUnit(first(text(row, "unit", "Unit", "baseUnit", "BaseUnit", "MEINS"), "PCS"));
                 product.setSpecification(first(text(row, "YY1_F_Specification_PRD", "SizeOrDimensionText", "specification", "Specification"), text(row, "ProductGroup", "MaterialGroup")));
@@ -242,7 +248,7 @@ public class SapSyncService {
                 product.setMaximumPackagingWidth(decimal(row, "MaximumPackagingWidth"));
                 product.setMaximumPackagingHeight(decimal(row, "MaximumPackagingHeight"));
                 product.setUnitForMaxPackagingDimensions(text(row, "UnitForMaxPackagingDimensions"));
-                // Extract from to_Description and to_BasicText expand
+                // Extract from to_Description and to_ProductBasicText expand
                 Map<String, String> descMap = productDescriptionsByLanguage(row);
                 String descFromExpand = first(descMap.get("ZH"), descMap.get("EN"), descMap.values().stream().findFirst().orElse(null));
                 product.setProductDescription(descFromExpand);
@@ -329,6 +335,7 @@ public class SapSyncService {
                 Product product = products.findByCode(productCode).orElseGet(() -> {
                     Product value = new Product();
                     value.setCode(finalProductCode);
+                    value.setName(first(text(row, "ProductName"), finalProductCode));
                     value.setNameZh(first(text(row, "ProductName"), finalProductCode));
                     value.setProductType("FINISHED");
                     value.setUnit(first(text(row, "ProductionUnit"), "PCS"));
@@ -811,6 +818,13 @@ public class SapSyncService {
                 errorMsg = "SAP returned HTTP " + response.getStatus();
                 throw new IllegalStateException(errorMsg);
             }
+            String contentType = response.getHeaders().getContentType() == null ? "" : response.getHeaders().getContentType().toString();
+            if (body != null && (body.trim().startsWith("<html") || body.contains("SAMLRequest") || body.contains("saml2/idp/sso"))) {
+                errorMsg = "SAP SAML SSO redirect detected (HTTP " + status + ", Content-Type: " + contentType + "). "
+                        + "Basic Authentication is not enabled for this API. "
+                        + "Please check SAP Communication Arrangement authentication method.";
+                throw new IllegalStateException(errorMsg);
+            }
             try {
                 JsonNode result = mapper.readTree(response.getBody() == null ? "{}" : response.getBody());
                 success = true;
@@ -979,7 +993,7 @@ public class SapSyncService {
      * 从 SAP OData 响应中按语言提取产品描述。
      * 数据来源:
      *   1) to_Description → A_ProductDescriptionType.ProductDescription (短描述, MaxLength=40)
-     *   2) to_BasicText   → A_ProductBasicTextType.LongText          (长文本, 无长度限制)
+     *   2) to_ProductBasicText → A_ProductBasicTextType.LongText     (长文本, 无长度限制)
      * LongText 更详细，优先覆盖 ProductDescription。
      *
      * @return Map<LanguageCode, Description>  例如 {"ZH": "产品描述", "EN": "Product Desc"}
@@ -995,9 +1009,9 @@ public class SapSyncService {
                 result.putIfAbsent(language.toUpperCase(), value);
             }
         }
-        // 2. 从 to_BasicText 提取长文本 (LongText)
+        // 2. 从 to_ProductBasicText 提取长文本 (LongText)
         //    LongText 更详细，直接覆盖短描述
-        List<JsonNode> basicTexts = childRows(row, "to_BasicText");
+        List<JsonNode> basicTexts = childRows(row, "to_ProductBasicText");
         for (JsonNode bt : basicTexts) {
             String language = text(bt, "Language");
             String value = text(bt, "LongText");

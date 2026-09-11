@@ -59,3 +59,6 @@ application-prod.yml
 
 # Keep Maven POM
 !pom.xml
+
+# ===== 本地凭据文件 (严禁提交) =====
+ssh_askpass.cmd

@@ -28,12 +28,16 @@ export function renderProducts() {
       { value: 'COMPONENT', label: 'COMPONENT' }
     ])
   ];
-  const actions = btn('sync-products', icon('refresh-cw') + t('syncProducts'), 'primary', 'INTEGRATION_WRITE');
+  const syncInput = `<input id="sync-product-code" type="text" placeholder="${t('productCode')}" class="filter-input" style="width:160px;margin-right:6px">`;
+  const syncSingleBtn = btn('sync-single-product', icon('package-check') + t('singleSync'), 'secondary', 'INTEGRATION_WRITE');
+  const syncAllBtn = btn('sync-products', icon('refresh-cw') + t('syncProducts'), 'primary', 'INTEGRATION_WRITE');
+  const actions = syncInput + syncSingleBtn + syncAllBtn;
   $('#page').innerHTML = pageHead(t('engineering'), t('products'), t('productSubtitle'), '')
     + `<div class="panel">${toolbar(fields, actions)}<div id="product-table"></div></div>`;
   $('#product-status')?.addEventListener('change', () => loadProducts(0));
   $('#product-type')?.addEventListener('change', () => loadProducts(0));
   $('#product-search')?.addEventListener('keydown', e => { if (e.key === 'Enter') loadProducts(0); });
+  $('#sync-product-code')?.addEventListener('keydown', e => { if (e.key === 'Enter') { $('#sync-single-product')?.click(); } });
   loadProducts();
 }
 
@@ -62,7 +66,6 @@ export async function loadProducts(page) {
   if (page !== undefined) p.page = page;
   const node = $('#product-table');
   if (!node) return;
-  // 加载产品类型字典映射
   await ensureProductTypeMap();
   const params = new URLSearchParams();
   params.set('page', p.page);
@@ -175,7 +178,7 @@ export async function openProductDetail(product) {
         return v.grossWeight != null ? `${v.grossWeight} ${v.weightUnit || ''}`.trim() : null;
       case 'netWeight':
         return v.netWeight != null ? `${v.netWeight} ${v.weightUnit || ''}`.trim() : null;
-      case 'name': return localizedMeta(v, 'name');
+      case 'name': return v.nameZh;
       case 'type': return productTypeLabel(v.productType);
       default: return readPath(v, key);
     }
@@ -262,7 +265,7 @@ export async function openProductDetail(product) {
 
   openDrawer(`${t('products')} · ${value.code}`, t('productSubtitle'), `<div class="drawer-body">${keyInfoCard([
     { label: t('code'), value: value.code, icon: 'package' },
-    { label: t('name'), value: localizedMeta(value, 'name'), icon: 'tag' },
+    { label: t('name'), value: value.nameZh || value.nameEn, icon: 'tag' },
     { label: t('type'), value: productTypeLabel(value.productType), icon: 'layers' },
     { label: t('specification'), value: value.specification, icon: 'ruler' },
     { label: t('customerPartNumber'), value: value.customerPartNumber, icon: 'hash' },
