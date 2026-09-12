@@ -737,6 +737,18 @@ a { text-decoration: none; color: inherit; }
 .config-row input:focus, .config-row select:focus { border-color: var(--brand); outline: none; box-shadow: 0 0 0 2px rgba(37,99,235,.08); }
 .config-row .check { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: var(--text-muted); white-space: nowrap; }
 .config-row .check input { width: 14px; height: 14px; accent-color: var(--primary); }
+
+.execution-tabs { padding: 10px 14px 0; }
+.form-grid label.span-2 { grid-column: 1 / -1; }
+#issue-lines { overflow-x: auto; }
+.material-line {
+  grid-template-columns: 32px minmax(120px,1fr) minmax(140px,1.2fr) minmax(110px,.9fr) minmax(90px,.7fr) 70px minmax(110px,.9fr) minmax(105px,.8fr) 72px 32px;
+  min-width: 1050px;
+}
+.inspection-result-line {
+  grid-template-columns: minmax(100px,.8fr) minmax(140px,1.2fr) minmax(140px,1fr) 110px;
+  min-width: 560px;
+}
 .danger-icon { color: var(--danger) !important; }
 .config-section > div[id] { overflow-x: auto; }
 

@@ -24,11 +24,12 @@ import { renderMenus, loadMenus } from '../views/menus.js';
 import { renderDictionaries, loadDictionaries } from '../views/dictionaries.js';
 import { renderInterfaces, loadInterfaces } from '../views/interfaces.js';
 import { renderEngineeringStub } from '../views/engineering-stub.js';
+import { renderExecution, loadExecution } from '../views/execution.js';
 
 const viewTitles = {
   overview: 'overview', master: 'masterData', iam: 'iam', menus: 'menuManagement', dictionaries: 'dataDictionary',
   products: 'products', boms: 'engineering', routes: 'routes', quality: 'quality', batches: 'batches',
-  orders: 'workOrders', integration: 'manualSync', jobs: 'scheduledJobs', apiLogs: 'apiLogs',
+  orders: 'workOrders', execution: 'productionOperations', integration: 'manualSync', jobs: 'scheduledJobs', apiLogs: 'apiLogs',
   interfaces: 'interfaceManagement'
 };
 
@@ -44,6 +45,7 @@ const viewRenderers = {
   quality: renderEngineeringStub,
   batches: renderBatches,
   orders: renderOrders,
+  execution: renderExecution,
   integration: renderIntegration,
   jobs: renderJobs,
   apiLogs: renderApiLogs,
@@ -55,6 +57,7 @@ export async function reloadCurrentView() {
   const loaders = {
     products: loadProducts,
     orders: loadOrders,
+    execution: loadExecution,
     batches: loadBatches,
     master: renderMaster, // master triggers its own load
     jobs: loadJobs,

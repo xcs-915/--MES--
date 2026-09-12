@@ -47,8 +47,8 @@ export function progressBar(value, total) {
 
 export function statusPill(value) {
   const label = t('status.' + value) || value;
-  const cls = ['ACTIVE','RELEASED','IN_PROGRESS','COMPLETED','SUCCESS','IDLE','ENABLED','UNREST'].includes(String(value)) ? 'success'
-    : ['DRAFT','RUNNING','PARTIAL'].includes(String(value)) ? 'warn'
+  const cls = ['ACTIVE','RELEASED','IN_PROGRESS','COMPLETED','SUCCESS','IDLE','ENABLED','UNREST','POSTED','PASSED'].includes(String(value)) ? 'success'
+    : ['DRAFT','RUNNING','PARTIAL','PENDING','POSTING'].includes(String(value)) ? 'warn'
     : ['FAILED','CANCELLED','DISABLED','INACTIVE','RESTRICTED'].includes(String(value)) ? 'danger' : '';
   return `<span class="status ${cls}">${esc(label || '—')}</span>`;
 }
