@@ -196,7 +196,7 @@ spec:
                 -Dserver.tomcat.max-threads=200
                 -Dserver.tomcat.accept-count=100
             - name: JAVA_TOOL_OPTIONS
-              value: "-Dcsp.sentinel.log.dir=/tmp"
+              value: "-Dcsp.sentinel.log.dir=/tmp -Drocketmq.client.logUseSlf4j=true"
           # 启动探针: 给 Spring Boot 足够启动时间 (Flyway 迁移 + Bean 初始化)
           # 失败前允许 300 秒 (30 次 × 10 秒)
           startupProbe:
