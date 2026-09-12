@@ -78,7 +78,7 @@ spec:
       containers:
         - name: tns-mes-server
           # 本地构建镜像, 不从远程仓库拉取
-          image: tns-mes-server:v35
+          image: tns-mes-server:v36
           imagePullPolicy: Never
           ports:
             - name: http
