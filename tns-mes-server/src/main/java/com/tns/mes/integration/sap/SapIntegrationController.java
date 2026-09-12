@@ -98,6 +98,36 @@ public class SapIntegrationController {
                 Collections.<String, Object>singletonMap("$filter", "Batch eq '" + batchNo.trim().replace("'", "''") + "'")), id(request));
     }
 
+    // --- 客户/供应商主数据同步（SAP A_BusinessPartner） ---
+
+    @PostMapping("/sap/customers/sync")
+    @PreAuthorize("hasAuthority('INTEGRATION_WRITE')")
+    public ApiResponse<SapSyncService.SyncResult> syncCustomers(@RequestBody(required = false) SyncRequest body, HttpServletRequest request) {
+        SyncRequest value = body == null ? new SyncRequest() : body;
+        return ApiResponse.ok(syncJobs.runByCode(SyncJobService.CUSTOMER_JOB, "MANUAL", value.path, value.effectiveQuery("LastChangeDateTime")), id(request));
+    }
+
+    @PostMapping("/sap/customers/{bpNumber}/sync")
+    @PreAuthorize("hasAuthority('INTEGRATION_WRITE')")
+    public ApiResponse<SapSyncService.SyncResult> syncCustomer(@PathVariable String bpNumber, HttpServletRequest request) {
+        return ApiResponse.ok(syncJobs.runByCode(SyncJobService.CUSTOMER_JOB, "MANUAL", null,
+                Collections.<String, Object>singletonMap("$filter", "BusinessPartner eq '" + bpNumber.trim().replace("'", "''") + "'")), id(request));
+    }
+
+    @PostMapping("/sap/suppliers/sync")
+    @PreAuthorize("hasAuthority('INTEGRATION_WRITE')")
+    public ApiResponse<SapSyncService.SyncResult> syncSuppliers(@RequestBody(required = false) SyncRequest body, HttpServletRequest request) {
+        SyncRequest value = body == null ? new SyncRequest() : body;
+        return ApiResponse.ok(syncJobs.runByCode(SyncJobService.SUPPLIER_JOB, "MANUAL", value.path, value.effectiveQuery("LastChangeDateTime")), id(request));
+    }
+
+    @PostMapping("/sap/suppliers/{bpNumber}/sync")
+    @PreAuthorize("hasAuthority('INTEGRATION_WRITE')")
+    public ApiResponse<SapSyncService.SyncResult> syncSupplier(@PathVariable String bpNumber, HttpServletRequest request) {
+        return ApiResponse.ok(syncJobs.runByCode(SyncJobService.SUPPLIER_JOB, "MANUAL", null,
+                Collections.<String, Object>singletonMap("$filter", "BusinessPartner eq '" + bpNumber.trim().replace("'", "''") + "'")), id(request));
+    }
+
     private String id(HttpServletRequest request) { Object value=request.getAttribute("requestId"); return value == null ? null : value.toString(); }
     public static class SyncRequest {
         private String path;

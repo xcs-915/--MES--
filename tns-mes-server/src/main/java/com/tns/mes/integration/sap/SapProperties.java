@@ -14,6 +14,10 @@ public class SapProperties {
     private String componentPath;
     private String operationPath = "/sap/opu/odata/sap/YY1_C_POOPERATIONS_CDS/YY1_C_POOperations";
     private String batchPath = "/sap/opu/odata/sap/API_BATCH_SRV/Batch";
+    private String customerPath = "/sap/opu/odata/sap/API_BUSINESS_PARTNER/A_BusinessPartner";
+    private String supplierPath = "/sap/opu/odata/sap/API_BUSINESS_PARTNER/A_BusinessPartner";
+    /** 工厂代码（工单同步过滤 Plant eq '<plant>'，对齐老 MES TK10；留空则不过滤） */
+    private String plant = "TK10";
     private String username;
     private String password;
     private String bearerToken;
@@ -34,6 +38,12 @@ public class SapProperties {
     public void setOperationPath(String value) { operationPath = value; }
     public String getBatchPath() { return batchPath; }
     public void setBatchPath(String value) { batchPath = value; }
+    public String getCustomerPath() { return customerPath; }
+    public void setCustomerPath(String value) { customerPath = value; }
+    public String getSupplierPath() { return supplierPath; }
+    public void setSupplierPath(String value) { supplierPath = value; }
+    public String getPlant() { return plant; }
+    public void setPlant(String value) { plant = value; }
     public String getUsername() { return username; }
     public void setUsername(String value) { username = value; }
     public String getPassword() { return password; }

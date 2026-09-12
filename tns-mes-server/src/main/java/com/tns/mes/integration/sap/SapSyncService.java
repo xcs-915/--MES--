@@ -12,6 +12,10 @@ import com.tns.mes.engineering.repo.ProcessRouteRepository;
 import com.tns.mes.engineering.repo.ProductRepository;
 import com.tns.mes.integration.ExternalApiClient;
 import com.tns.mes.integration.outbox.OutboxService;
+import com.tns.mes.integration.sap.domain.Customer;
+import com.tns.mes.integration.sap.domain.Supplier;
+import com.tns.mes.integration.sap.repository.CustomerRepository;
+import com.tns.mes.integration.sap.repository.SupplierRepository;
 import com.tns.mes.integration.sap.service.ApiCallLogService;
 import com.tns.mes.common.exception.BizException;
 import com.tns.mes.production.domain.WorkOrder;
@@ -53,14 +57,19 @@ public class SapSyncService {
     private final ProcessRouteRepository routes;
     private final WorkOrderRepository workOrders;
     private final BatchRepository batches;
+    private final CustomerRepository customers;
+    private final SupplierRepository suppliers;
     private final OutboxService outbox;
     private final ApiCallLogService apiCallLogs;
 
     public SapSyncService(ExternalApiClient client, SapProperties properties, ObjectMapper mapper,
                           ProductRepository products, BomRepository boms, ProcessRouteRepository routes,
-                          WorkOrderRepository workOrders, BatchRepository batches, OutboxService outbox, ApiCallLogService apiCallLogs) {
+                          WorkOrderRepository workOrders, BatchRepository batches,
+                          CustomerRepository customers, SupplierRepository suppliers,
+                          OutboxService outbox, ApiCallLogService apiCallLogs) {
         this.client = client; this.properties = properties; this.mapper = mapper;
-        this.products = products; this.boms = boms; this.routes = routes; this.workOrders = workOrders; this.batches = batches; this.outbox = outbox;
+        this.products = products; this.boms = boms; this.routes = routes; this.workOrders = workOrders; this.batches = batches;
+        this.customers = customers; this.suppliers = suppliers; this.outbox = outbox;
         this.apiCallLogs = apiCallLogs;
     }
 
@@ -516,6 +525,119 @@ public class SapSyncService {
         return new SyncResult("BATCH", rows.size(), created, updated, failed, errors);
     }
 
+    /**
+     * 客户主数据同步（SAP A_BusinessPartner，BusinessPartnerIsCustomer eq true）。
+     * 对齐老 MES：MES_GetCustomer_ViewList，按 LastChangeDateTime 增量，每日全量兜底。
+     */
+    @Transactional
+    public SyncResult syncCustomers(String path, Map<String, ?> query) {
+        Map<String, Object> bpQuery = new HashMap<>();
+        if (query != null) bpQuery.putAll(query);
+        if (!bpQuery.containsKey("$filter")) {
+            bpQuery.put("$filter", "BusinessPartnerIsCustomer eq true and " + recentChangeFilter("LastChangeDateTime"));
+        }
+        bpQuery.putIfAbsent("$top", properties.getPageSize());
+        bpQuery.putIfAbsent("$select", "BusinessPartner,BusinessPartnerType,BusinessPartnerName,BusinessPartnerFullName,"
+                + "SearchTerm1,Country,CityName,PostalCode,StreetName,TaxNumber,VATRegistration,IsBlocked,"
+                + "CreationDate,LastChangeDateTime");
+        List<JsonNode> rows = fetchAllPages(pathOrDefault(path, properties.getCustomerPath()), bpQuery);
+        int created = 0, updated = 0, failed = 0;
+        List<String> errors = new ArrayList<>();
+        for (JsonNode row : rows) {
+            try {
+                String bpNumber = text(row, "BusinessPartner", "bpNumber", "Customer", "Supplier");
+                if (bpNumber == null || bpNumber.trim().isEmpty()) throw new IllegalArgumentException("Missing BusinessPartner");
+                bpNumber = bpNumber.trim();
+                Customer customer = customers.findByBpNumber(bpNumber).orElse(null);
+                boolean isNew = customer == null;
+                if (isNew) customer = new Customer();
+                customer.setBpNumber(bpNumber);
+                customer.setBpType(text(row, "BusinessPartnerType"));
+                customer.setName(first(text(row, "BusinessPartnerName", "name", "Name"), bpNumber));
+                customer.setFullName(text(row, "BusinessPartnerFullName"));
+                customer.setSearchTerm(text(row, "SearchTerm1"));
+                customer.setCountry(text(row, "Country"));
+                customer.setCity(text(row, "CityName"));
+                customer.setPostalCode(text(row, "PostalCode"));
+                customer.setStreet(text(row, "StreetName"));
+                customer.setTaxNumber(text(row, "TaxNumber"));
+                customer.setVatRegistration(text(row, "VATRegistration"));
+                customer.setStatus(bool(row, false, "IsBlocked") ? "BLOCKED" : "ACTIVE");
+                customer.setSource("SAP");
+                Customer saved = customers.save(customer);
+                outbox.enqueue("CUSTOMER", String.valueOf(saved.getId()),
+                        isNew ? "CUSTOMER_SYNC_CREATED" : "CUSTOMER_SYNC_UPDATED",
+                        mapOf("source", "SAP", "bpNumber", bpNumber));
+                if (isNew) created++; else updated++;
+            } catch (RuntimeException ex) {
+                failed++;
+                String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                errors.add(bpNumberOf(row) + ": " + message);
+                log.warn("SAP customer sync failed", ex);
+            }
+        }
+        return new SyncResult("CUSTOMER", rows.size(), created, updated, failed, errors);
+    }
+
+    /**
+     * 供应商主数据同步（SAP A_BusinessPartner，BusinessPartnerIsSupplier eq true）。
+     * 对齐老 MES：MES_GetVendor_ViewList，按 LastChangeDateTime 增量。
+     */
+    @Transactional
+    public SyncResult syncSuppliers(String path, Map<String, ?> query) {
+        Map<String, Object> bpQuery = new HashMap<>();
+        if (query != null) bpQuery.putAll(query);
+        if (!bpQuery.containsKey("$filter")) {
+            bpQuery.put("$filter", "BusinessPartnerIsSupplier eq true and " + recentChangeFilter("LastChangeDateTime"));
+        }
+        bpQuery.putIfAbsent("$top", properties.getPageSize());
+        bpQuery.putIfAbsent("$select", "BusinessPartner,BusinessPartnerType,BusinessPartnerName,BusinessPartnerFullName,"
+                + "SearchTerm1,Country,CityName,PostalCode,StreetName,TaxNumber,VATRegistration,IsBlocked,"
+                + "CreationDate,LastChangeDateTime");
+        List<JsonNode> rows = fetchAllPages(pathOrDefault(path, properties.getSupplierPath()), bpQuery);
+        int created = 0, updated = 0, failed = 0;
+        List<String> errors = new ArrayList<>();
+        for (JsonNode row : rows) {
+            try {
+                String bpNumber = text(row, "BusinessPartner", "bpNumber", "Supplier", "Vendor");
+                if (bpNumber == null || bpNumber.trim().isEmpty()) throw new IllegalArgumentException("Missing BusinessPartner");
+                bpNumber = bpNumber.trim();
+                Supplier supplier = suppliers.findByBpNumber(bpNumber).orElse(null);
+                boolean isNew = supplier == null;
+                if (isNew) supplier = new Supplier();
+                supplier.setBpNumber(bpNumber);
+                supplier.setBpType(text(row, "BusinessPartnerType"));
+                supplier.setName(first(text(row, "BusinessPartnerName", "name", "Name"), bpNumber));
+                supplier.setFullName(text(row, "BusinessPartnerFullName"));
+                supplier.setSearchTerm(text(row, "SearchTerm1"));
+                supplier.setCountry(text(row, "Country"));
+                supplier.setCity(text(row, "CityName"));
+                supplier.setPostalCode(text(row, "PostalCode"));
+                supplier.setStreet(text(row, "StreetName"));
+                supplier.setTaxNumber(text(row, "TaxNumber"));
+                supplier.setVatRegistration(text(row, "VATRegistration"));
+                supplier.setStatus(bool(row, false, "IsBlocked") ? "BLOCKED" : "ACTIVE");
+                supplier.setSource("SAP");
+                Supplier saved = suppliers.save(supplier);
+                outbox.enqueue("SUPPLIER", String.valueOf(saved.getId()),
+                        isNew ? "SUPPLIER_SYNC_CREATED" : "SUPPLIER_SYNC_UPDATED",
+                        mapOf("source", "SAP", "bpNumber", bpNumber));
+                if (isNew) created++; else updated++;
+            } catch (RuntimeException ex) {
+                failed++;
+                String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                errors.add(bpNumberOf(row) + ": " + message);
+                log.warn("SAP supplier sync failed", ex);
+            }
+        }
+        return new SyncResult("SUPPLIER", rows.size(), created, updated, failed, errors);
+    }
+
+    private String bpNumberOf(JsonNode row) {
+        String value = text(row, "BusinessPartner", "bpNumber", "Customer", "Supplier");
+        return value == null ? "unknown" : value;
+    }
+
     /** Sync operations from $expand to_ProductionOrderOperation (API_PRODUCTION_ORDER_2_SRV). */
     private void syncOperationsFromExpand(List<JsonNode> opRows, WorkOrder order, Product product) {
         if (opRows == null || opRows.isEmpty()) return;
@@ -910,8 +1032,10 @@ public class SapSyncService {
         return field + " ge datetimeoffset'" + since + "'";
     }
 
-    /** Work order filter: Plant eq 'TK10' AND (created recently OR changed recently).
-     *  Note: LastChangeDateTime in A_ProductionOrder_2 is a string (yyyyMMddHHmmss), not datetimeoffset. */
+    /** Work order filter: Plant eq '<configured plant>' AND (created recently OR changed recently).
+     *  Note: LastChangeDateTime in A_ProductionOrder_2 is a string (yyyyMMddHHmmss), not datetimeoffset.
+     *  Plant code is configurable (mes.integration.sap.plant, default TK10, aligned with legacy MES);
+     *  when blank, no plant filter is applied. */
     private String workOrderRecentFilter() {
         OffsetDateTime since = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(15).minusHours(8).truncatedTo(ChronoUnit.SECONDS);
         OffsetDateTime until = OffsetDateTime.now(ZoneOffset.UTC).plusDays(1).truncatedTo(ChronoUnit.SECONDS);
@@ -920,7 +1044,10 @@ public class SapSyncService {
         // LastChangeDateTime is string format yyyyMMddHHmmss
         String sinceStr = since.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         String untilStr = until.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        return "(Plant eq 'TK10') and ((MfgOrderCreationDate ge datetime'" + sinceDate + "' and MfgOrderCreationDate lt datetime'" + untilDate + "') or (LastChangeDateTime ge '" + sinceStr + "' and LastChangeDateTime lt '" + untilStr + "'))";
+        String plantFilter = properties.getPlant() == null || properties.getPlant().trim().isEmpty()
+                ? ""
+                : "(Plant eq '" + properties.getPlant().trim().replace("'", "''") + "') and ";
+        return plantFilter + "((MfgOrderCreationDate ge datetime'" + sinceDate + "' and MfgOrderCreationDate lt datetime'" + untilDate + "') or (LastChangeDateTime ge '" + sinceStr + "' and LastChangeDateTime lt '" + untilStr + "'))";
     }
 
     /** Convert a LastChangeDateTime filter from datetimeoffset format to plain string format (yyyyMMddHHmmss)

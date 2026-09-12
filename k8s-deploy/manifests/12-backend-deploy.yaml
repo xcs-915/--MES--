@@ -78,7 +78,7 @@ spec:
       containers:
         - name: tns-mes-server
           # 本地构建镜像, 不从远程仓库拉取
-          image: tns-mes-server:v31
+          image: tns-mes-server:v32
           imagePullPolicy: Never
           ports:
             - name: http
@@ -113,6 +113,17 @@ spec:
                 secretKeyRef:
                   name: tns-mes-secrets
                   key: redis-password
+            # ---------- SAP 集成中台凭证 (Secret) ----------
+            - name: MES_MIDDLEWARE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: middleware-username
+            - name: MES_MIDDLEWARE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tns-mes-secrets
+                  key: middleware-password
             # ---------- Spring Boot Redis Relaxed Binding ----------
             # 直接通过环境变量设置 Spring 属性, 不依赖 YAML 占位符解析
             - name: SPRING_DATA_REDIS_HOST

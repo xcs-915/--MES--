@@ -23,6 +23,8 @@ public class SyncJobService {
     public static final String PRODUCT_JOB = "SAP_PRODUCT_SYNC";
     public static final String WORK_ORDER_JOB = "SAP_WORK_ORDER_SYNC";
     public static final String BATCH_JOB = "SAP_BATCH_SYNC";
+    public static final String CUSTOMER_JOB = "SAP_CUSTOMER_SYNC";
+    public static final String SUPPLIER_JOB = "SAP_SUPPLIER_SYNC";
 
     private final SyncJobRepository jobs;
     private final SyncRunRepository runs;
@@ -45,6 +47,10 @@ public class SyncJobService {
                 sapProperties.getWorkOrderPath(), "0 5/15 * * * *", "同步生产工单，并获取工单组件和工序", 20);
         upsertDefault(BATCH_JOB, "SAP批次同步", "SAP batch sync", "مزامنة الدفعات SAP",
                 sapProperties.getBatchPath(), "0 10/15 * * * *", "从SAP同步批次主数据及状态", 30);
+        upsertDefault(CUSTOMER_JOB, "SAP客户主数据同步", "SAP customer master sync", "مزامنة عملاء SAP",
+                sapProperties.getCustomerPath(), "0 0 4 * * *", "从SAP业务伙伴接口同步客户主数据（BusinessPartnerIsCustomer）", 40);
+        upsertDefault(SUPPLIER_JOB, "SAP供应商主数据同步", "SAP supplier master sync", "مزامنة موردين SAP",
+                sapProperties.getSupplierPath(), "0 10 4 * * *", "从SAP业务伙伴接口同步供应商主数据（BusinessPartnerIsSupplier）", 50);
     }
 
     private void upsertDefault(String code, String zh, String en, String ar, String endpoint,
@@ -144,11 +150,15 @@ public class SyncJobService {
         run.setCreatedAt(started);
         run = runs.save(run);
         try {
-            SapSyncService.SyncResult result = PRODUCT_JOB.equals(job.getCode())
-                    ? sapSyncService.syncProducts(path, query)
-                    : (WORK_ORDER_JOB.equals(job.getCode())
-                    ? sapSyncService.syncWorkOrders(path, query)
-                    : sapSyncService.syncBatches(path, query));
+            SapSyncService.SyncResult result;
+            switch (job.getCode()) {
+                case PRODUCT_JOB:    result = sapSyncService.syncProducts(path, query); break;
+                case WORK_ORDER_JOB: result = sapSyncService.syncWorkOrders(path, query); break;
+                case BATCH_JOB:      result = sapSyncService.syncBatches(path, query); break;
+                case CUSTOMER_JOB:   result = sapSyncService.syncCustomers(path, query); break;
+                case SUPPLIER_JOB:   result = sapSyncService.syncSuppliers(path, query); break;
+                default: throw new BizException(4041, "error.not-found");
+            }
             run.setReceivedCount(result.getReceived());
             run.setCreatedCount(result.getCreated());
             run.setUpdatedCount(result.getUpdated());

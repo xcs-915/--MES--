@@ -44,6 +44,12 @@ mes:
     ttl-seconds: 86400
   rate-limit:
     requests-per-minute: 120
+  middleware:
+    enabled: ${MES_MIDDLEWARE_ENABLED:true}
+    base-url: ${MES_MIDDLEWARE_BASE_URL:http://10.30.10.42:9999}
+    username: ${MES_MIDDLEWARE_USERNAME:MES-JX}
+    password: ${MES_MIDDLEWARE_PASSWORD:}
+    token-ttl-minutes: ${MES_MIDDLEWARE_TOKEN_TTL_MINUTES:180}
   integration:
     http:
       connect-timeout-ms: ${MES_INTEGRATION_CONNECT_TIMEOUT_MS:5000}
@@ -58,6 +64,9 @@ mes:
       product-path: ${MES_SAP_PRODUCT_PATH:/sap/opu/odata/sap/API_PRODUCT_SRV/A_Product}
       work-order-path: ${MES_SAP_WORK_ORDER_PATH:/sap/opu/odata/sap/API_PRODUCTION_ORDER_2_SRV/A_ProductionOrder_2}
       batch-path: ${MES_SAP_BATCH_PATH:/sap/opu/odata/sap/API_BATCH_SRV/Batch}
+      customer-path: ${MES_SAP_CUSTOMER_PATH:/sap/opu/odata/sap/API_BUSINESS_PARTNER/A_BusinessPartner}
+      supplier-path: ${MES_SAP_SUPPLIER_PATH:/sap/opu/odata/sap/API_BUSINESS_PARTNER/A_BusinessPartner}
+      plant: ${MES_SAP_PLANT:TK10}
       component-path: ${MES_SAP_COMPONENT_PATH:}
       operation-path: ${MES_SAP_OPERATION_PATH:/sap/opu/odata/sap/YY1_C_POOPERATIONS_CDS/YY1_C_POOperations}
       username: ${MES_SAP_USERNAME:}
