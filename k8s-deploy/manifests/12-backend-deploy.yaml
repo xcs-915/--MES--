@@ -180,6 +180,8 @@ spec:
               value: "tns-mes-server"
             - name: SW_AGENT_COLLECTOR_BACKEND_SERVICES
               value: "skywalking-oap.tns-mes-observability:11800"
+            - name: SW_LOGGING_OUTPUT
+              value: "CONSOLE"
             # ---------- JVM 参数 (优化容器内存) ----------
             - name: JAVA_OPTS
               value: >-
