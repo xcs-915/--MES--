@@ -16,7 +16,14 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -36,6 +43,58 @@ class SapSyncServiceTests {
     @Autowired private WorkOrderRepository workOrders;
     @Autowired private BomRepository boms;
     @Autowired private ProcessRouteRepository routes;
+
+    @Test
+    void synchronizesProductNameFromExpandedDescription() {
+        MockRestServiceServer server = MockRestServiceServer.bindTo(externalRestTemplate).build();
+        server.expect(request -> {
+            String query = URLDecoder.decode(request.getURI().getRawQuery(), StandardCharsets.UTF_8.name());
+            assertTrue(query.contains("$select="));
+            assertTrue(query.contains("to_Description"));
+        }).andRespond(withSuccess(
+                "{\"d\":{\"results\":[{\"Product\":\"7010000206AA\",\"ProductType\":\"Z10\",\"BaseUnit\":\"PCS\","
+                        + "\"to_Description\":{\"results\":[{\"Language\":\"ZH\",\"ProductDescription\":\"HODPE袋透明\"}]}}]}}",
+                MediaType.APPLICATION_JSON));
+
+        SapSyncService.SyncResult result = service.syncProduct("7010000206AA");
+        server.verify();
+
+        assertEquals(1, result.getCreated());
+        com.tns.mes.engineering.domain.Product product = products.findByCode("7010000206AA")
+                .orElseThrow(AssertionError::new);
+        assertEquals("HODPE袋透明", product.getName());
+        assertEquals("HODPE袋透明", product.getNameZh());
+        assertNull(product.getNameEn());
+        assertEquals("HODPE袋透明", product.getProductDescription());
+    }
+
+    @Test
+    void continuesWithSkipWhenSapOmitsNextLink() {
+        MockRestServiceServer server = MockRestServiceServer.bindTo(externalRestTemplate).build();
+        server.expect(request -> {
+            String query = URLDecoder.decode(request.getURI().getRawQuery(), StandardCharsets.UTF_8.name());
+            assertTrue(query.contains("$top=2"));
+            assertTrue(!query.contains("$skip="));
+        }).andRespond(withSuccess(
+                "{\"d\":{\"results\":[{\"Product\":\"PAGE-1\",\"ProductDescription\":\"First\"},{\"Product\":\"PAGE-2\",\"ProductDescription\":\"Second\"}]}}",
+                MediaType.APPLICATION_JSON));
+        server.expect(request -> {
+            String query = URLDecoder.decode(request.getURI().getRawQuery(), StandardCharsets.UTF_8.name());
+            assertTrue(query.contains("$top=2"));
+            assertTrue(query.contains("$skip=2"));
+        }).andRespond(withSuccess(
+                "{\"d\":{\"results\":[{\"Product\":\"PAGE-3\",\"ProductDescription\":\"Third\"}]}}",
+                MediaType.APPLICATION_JSON));
+        Map<String, Object> query = new HashMap<>();
+        query.put("$top", 2);
+        query.put("$orderby", "Product");
+
+        SapSyncService.SyncResult result = service.syncProducts(null, query);
+        server.verify();
+
+        assertEquals(3, result.getReceived());
+        assertEquals(3, result.getCreated());
+    }
 
     @Test
     void synchronizesSingleWorkOrderWithComponentsAndRoute() {

@@ -40,10 +40,12 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -125,6 +127,8 @@ public class SapSyncService {
                 + "QualityInspectionGroup,AuthorizationGroup,DocumentIsCreatedByCAD,HandlingUnitType,"
                 + "HasVariableTareWeight,MaximumPackagingLength,MaximumPackagingWidth,MaximumPackagingHeight,"
                 + "UnitForMaxPackagingDimensions,"
+                // SAP omits expanded navigation data when an explicit $select does not include it.
+                + "to_Description,to_ProductBasicText,to_Plant,to_ProductUnitsOfMeasure,to_SalesDelivery,to_Valuation,"
                 + "YY1_F_Specification_PRD,YY1_F_BrandM_PRD,YY1_F_Color_PRD,YY1_F_ExteriorColor_PRD,"
                 + "YY1_F_CustomerPartN_PRD,YY1_F_ProductModel_PRD,YY1_F_DrawingNo_PRD,SizeOrDimensionText,"
                 + "YY1_F_ColorNumber_PRD,YY1_F_FIFOProsign_PRD,YY1_F_Moisturlever_PRD,YY1_F_Moisturesensiti_PRD,"
@@ -158,13 +162,14 @@ public class SapSyncService {
                 String descAr = langDescs.get("AR");
                 String anyDesc = langDescs.values().stream().findFirst().orElse(null);
                 String bestDesc = first(descZh, descEn, anyDesc, expandedDescription);
-                String nameEn = first(text(row, "nameEn", "NameEn", "description", "Description", "ProductDescription", "MaterialDescription", "materialDescription"), descEn, bestDesc);
-                String nameZh = first(text(row, "nameZh", "NameZh", "DescriptionZh", "ProductDescriptionZh"), descZh, bestDesc);
+                String directDescription = text(row, "description", "Description", "ProductDescription", "MaterialDescription", "materialDescription");
+                String nameEn = first(text(row, "nameEn", "NameEn"), descEn);
+                String nameZh = first(text(row, "nameZh", "NameZh", "DescriptionZh", "ProductDescriptionZh"), descZh, directDescription, bestDesc);
                 String nameAr = first(text(row, "nameAr", "NameAr", "DescriptionAr", "ProductDescriptionAr"), descAr);
                 product.setNameEn(nameEn);
                 product.setNameZh(first(nameZh, nameEn, code));
                 product.setNameAr(nameAr);
-                product.setName(first(bestDesc, nameZh, nameEn, code));
+                product.setName(first(bestDesc, directDescription, nameZh, nameEn, code));
                 product.setProductType(first(text(row, "productType", "ProductType", "materialType", "MaterialType"), "FINISHED"));
                 product.setUnit(first(text(row, "unit", "Unit", "baseUnit", "BaseUnit", "MEINS"), "PCS"));
                 product.setSpecification(first(text(row, "YY1_F_Specification_PRD", "SizeOrDimensionText", "specification", "Specification"), text(row, "ProductGroup", "MaterialGroup")));
@@ -964,22 +969,47 @@ public class SapSyncService {
         }
     }
 
-    /** Fetches all pages from SAP OData by following __next links. */
+    /** Fetches all pages from SAP OData, with $skip fallback when __next is omitted. */
     private List<JsonNode> fetchAllPages(String path, Map<String, ?> query) {
         List<JsonNode> allRows = new ArrayList<>();
+        Map<String, Object> baseQuery = new HashMap<>();
+        if (query != null) baseQuery.putAll(query);
+        int pageSize = positiveInt(baseQuery.get("$top"), properties.getPageSize());
+        int initialSkip = positiveInt(baseQuery.get("$skip"), 0);
+        Set<String> seenPages = new HashSet<>();
         JsonNode root = getJson(path, query);
-        allRows.addAll(rows(root));
         int pageCount = 0;
         while (pageCount < 50) {
+            List<JsonNode> pageRows = rows(root);
+            if (pageRows.isEmpty()) break;
+            String fingerprint = pageRows.size() + ":" + pageRows.get(0).toString() + ":" + pageRows.get(pageRows.size() - 1).toString();
+            if (!seenPages.add(fingerprint)) {
+                log.warn("SAP pagination returned a duplicate page; stopping at {} rows", allRows.size());
+                break;
+            }
+            allRows.addAll(pageRows);
+
             String nextLink = nextLink(root);
-            if (nextLink == null || nextLink.trim().isEmpty()) break;
-            String nextPath = extractPath(nextLink, path);
-            Map<String, Object> nextQuery = extractQuery(nextLink);
-            root = getJson(nextPath, nextQuery);
-            allRows.addAll(rows(root));
+            if (nextLink != null && !nextLink.trim().isEmpty()) {
+                root = getJson(extractPath(nextLink, path), extractQuery(nextLink));
+            } else {
+                if (pageRows.size() < pageSize) break;
+                Map<String, Object> nextQuery = new HashMap<>(baseQuery);
+                nextQuery.put("$skip", initialSkip + allRows.size());
+                root = getJson(path, nextQuery);
+            }
             pageCount++;
         }
         return allRows;
+    }
+
+    private int positiveInt(Object value, int fallback) {
+        try {
+            int parsed = value == null ? fallback : Integer.parseInt(String.valueOf(value));
+            return parsed > 0 ? parsed : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
     }
 
     /** Extracts the __next link from an OData v2 response. */
