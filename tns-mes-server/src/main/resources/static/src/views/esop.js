@@ -769,7 +769,7 @@ document.addEventListener('click', async e => {
       case 'esop-add-product-page': c.pages.push(defaultPage('product')); renderEditor(); return;
       case 'esop-remove-page': if (c.pages.length > 1) { c.pages.splice(pi, 1); renderEditor(); } else toast(t('lastPage'), true); return;
       case 'esop-add-table': {
-        const presetKey = node.closest('.esop-edit-addline')?.querySelector('.esop-preset')?.value || 'custom';
+        const presetKey = node.closest('.esop-lv-addline')?.querySelector('.esop-preset')?.value || 'custom';
         const preset = TABLE_PRESETS().find(p => p.key === presetKey) || TABLE_PRESETS().find(p => p.key === 'custom');
         c.pages[pi].tables.push({ title: preset.title, columns: [...preset.columns], rows: [] });
         renderEditor(); return;
