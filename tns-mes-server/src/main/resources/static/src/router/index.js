@@ -25,12 +25,13 @@ import { renderDictionaries, loadDictionaries } from '../views/dictionaries.js';
 import { renderInterfaces, loadInterfaces } from '../views/interfaces.js';
 import { renderEngineeringStub } from '../views/engineering-stub.js';
 import { renderExecution, loadExecution } from '../views/execution.js';
+import { renderEsops, loadEsops } from '../views/esop.js';
 
 const viewTitles = {
   overview: 'overview', master: 'masterData', iam: 'iam', menus: 'menuManagement', dictionaries: 'dataDictionary',
   products: 'products', boms: 'engineering', routes: 'routes', quality: 'quality', batches: 'batches',
   orders: 'workOrders', execution: 'productionOperations', integration: 'manualSync', jobs: 'scheduledJobs', apiLogs: 'apiLogs',
-  interfaces: 'interfaceManagement'
+  interfaces: 'interfaceManagement', esops: 'esops'
 };
 
 const viewRenderers = {
@@ -50,6 +51,7 @@ const viewRenderers = {
   jobs: renderJobs,
   apiLogs: renderApiLogs,
   interfaces: renderInterfaces,
+  esops: renderEsops,
 };
 
 /** Reload data for the current view */
@@ -65,6 +67,7 @@ export async function reloadCurrentView() {
     dictionaries: loadDictionaries,
     interfaces: loadInterfaces,
     apiLogs: loadApiLogs,
+    esops: loadEsops,
   };
 
   if (state.view === 'iam') {

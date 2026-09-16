@@ -46,6 +46,7 @@ import { renderIam, loadRoles, loadUsers, openRoleDetail, openRoleCreate, openUs
 import { renderMenus, loadMenus, openMenuCreate, openMenuEdit, openMenuConfig } from './views/menus.js';
 import { renderDictionaries, loadDictionaries, setCurrentType, openDictionaryCreate, openDictionaryEdit, openDictTypeCreate, openDictTypeEdit } from './views/dictionaries.js';
 import { renderInterfaces, loadInterfaces, openCategoryCreate, openCategoryEdit, openSystemCreate, openSystemEdit, openDefCreate, openDefEdit } from './views/interfaces.js';
+import { loadEsops } from './views/esop.js';
 
 /* ================================================================
    EVENT HANDLERS (consolidated single click handler)
@@ -81,7 +82,7 @@ document.addEventListener('click', async event => {
     const newPage = parseInt(pageBtn.dataset.page);
     const p = state.data[state.view];
     if (p && newPage >= 0 && newPage < p.totalPages) {
-      const loader = ({ products: loadProducts, orders: loadOrders, batches: loadBatches, apiLogs: loadApiLogs })[state.view];
+      const loader = ({ products: loadProducts, orders: loadOrders, batches: loadBatches, apiLogs: loadApiLogs, esops: loadEsops })[state.view];
       if (loader) await loader(newPage);
     }
     return;
@@ -96,7 +97,7 @@ document.addEventListener('click', async event => {
     if (p) {
       p.sortKey = key;
       p.sortDir = dir;
-      const loader = ({ products: loadProducts, orders: loadOrders, batches: loadBatches })[state.view];
+      const loader = ({ products: loadProducts, orders: loadOrders, batches: loadBatches, esops: loadEsops })[state.view];
       if (loader) await loader();
     }
     return;
@@ -287,7 +288,7 @@ document.addEventListener('change', event => {
   if (p) {
     p.size = parseInt(sizeSelect.value);
     p.page = 0;
-    const loader = ({ products: loadProducts, orders: loadOrders, batches: loadBatches, apiLogs: loadApiLogs })[state.view];
+    const loader = ({ products: loadProducts, orders: loadOrders, batches: loadBatches, apiLogs: loadApiLogs, esops: loadEsops })[state.view];
     if (loader) loader(0);
   }
 });

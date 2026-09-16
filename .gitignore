@@ -62,3 +62,6 @@ application-prod.yml
 
 # ===== 本地凭据文件 (严禁提交) =====
 ssh_askpass.cmd
+
+# ===== 本地临时脚本 =====
+tmp/

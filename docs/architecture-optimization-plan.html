@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TNS-MES 架构优化方案 · 2026-09</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#161a23; --panel2:#1c212e; --line:#2a3042;
+    --txt:#e8eaf0; --muted:#8b93a7; --acc:#4f8cff; --ok:#3ecf8e;
+    --p0:#ff5c5c; --p1:#ffb020; --p2:#5aa9ff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.65;padding:32px 4vw}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:26px;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:28px}
+  h2{font-size:19px;margin:36px 0 14px;padding-left:12px;border-left:3px solid var(--acc)}
+  h3{font-size:15px;margin:18px 0 8px;color:#cdd4e4}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .kpi{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .kpi b{font-size:24px;color:var(--acc);display:block}
+  .kpi span{color:var(--muted);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+  th{background:var(--panel2);text-align:left;padding:8px 10px;border:1px solid var(--line);color:#cdd4e4;font-weight:600;white-space:nowrap}
+  td{padding:7px 10px;border:1px solid var(--line);vertical-align:top}
+  code{background:#232a3a;color:#7ec4ff;padding:1px 6px;border-radius:4px;font-size:12px;font-family:Consolas,monospace}
+  .tag{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+  .t0{background:rgba(255,92,92,.15);color:var(--p0);border:1px solid rgba(255,92,92,.4)}
+  .t1{background:rgba(255,176,32,.15);color:var(--p1);border:1px solid rgba(255,176,32,.4)}
+  .t2{background:rgba(90,169,255,.15);color:var(--p2);border:1px solid rgba(90,169,255,.4)}
+  .tfix{background:rgba(62,207,142,.15);color:var(--ok);border:1px solid rgba(62,207,142,.4)}
+  .issue{margin-bottom:12px;padding:12px 14px;background:var(--panel2);border-radius:8px;border-left:3px solid var(--p0)}
+  .issue.p1{border-left-color:var(--p1)}
+  .issue.p2{border-left-color:var(--p2)}
+  .issue h4{font-size:14px;margin-bottom:4px}
+  .issue p{font-size:13px;color:#c3c9d8}
+  .issue .fix{margin-top:6px;font-size:13px;color:var(--ok)}
+  ul{padding-left:20px;font-size:13px;color:#c3c9d8}
+  li{margin:4px 0}
+  .phase{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+  .phase .num{flex:0 0 34px;height:34px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .note{background:rgba(79,140,255,.08);border:1px solid rgba(79,140,255,.3);border-radius:8px;padding:10px 14px;font-size:13px;color:#a8c6ff;margin:12px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>TNS-MES 架构优化方案</h1>
+<div class="sub">分析日期 2026-09-16 · 基于本地代码 D:\TNS-MES + 生产数据库实查（tns_mes @ 10.30.10.141）</div>
+
+<h2>0 · 服务拓扑现状</h2>
+<div class="grid">
+  <div class="kpi"><b>K8s × 2 副本</b><span>应用服务器 10.30.10.140 · tns-mes-backend v32</span></div>
+  <div class="kpi"><b>SQL Server</b><span>数据库服务器 10.30.10.141 · tns_mes 库 37 表</span></div>
+  <div class="kpi"><b>SAP 测试租户</b><span>my200683 · Basic Auth · 200+ 产品</span></div>
+  <div class="kpi"><b>中间件默认关闭</b><span>RocketMQ/Sentinel/Nacos/Seata 特性开关</span></div>
+</div>
+<div class="note">拓扑含义：双 Pod 并行 → 一切定时任务必须加<b>分布式锁</b>；独立 DB 服务器、连接池仅 20 → <b>事务内不得做外部 IO</b>；中间件可随时不可用 → 集成层需<b>可降级</b>。以下问题按此原则排序。</div>
+
+<h2>1 · 数据库架构（实查证据）</h2>
+
+<div class="issue">
+<h4><span class="tag t0">P0</span> 大字段内联，主表膨胀严重</h4>
+<p>实测行均 payload：<code>prd_work_order</code> <b>47KB/行（最大 180KB）</b>——600 行占 20MB；<code>qa_batch</code> 12.7KB/行；<code>product</code> 9KB/行（1849 行含 payload）。<code>sap_payload nvarchar(max)</code> 内联在聚集索引中，全表扫描/统计信息/备份全部被拖慢。</p>
+<p class="fix">✎ 方案：建 <code>int_sap_payload(entity_type, entity_id, payload, fetched_at)</code> 独立表，主表去除 nvarchar(max)；同步时按需回查，列表/报表零开销。</p>
+</div>
+
+<div class="issue">
+<h4><span class="tag t0">P0</span> Outbox 已发布消息从不清理</h4>
+<p>实测 <code>mes_outbox_message</code> 存量 12195 行，其中 <b>PUBLISHED 状态 4065 条</b>（最旧 2026-09-03），发布成功后永久滞留，表持续线性增长。</p>
+<p class="fix">✎ 方案：新增定时清理（PUBLISHED 且 7 天前 → 删除，每次限 500 批删）；或 V23 中预留的归档机制补上执行 job。同时需分布式锁防双 Pod 并发清理。</p>
+</div>
+
+<div class="issue p1">
+<h4><span class="tag t1">P1</span> product 表 114 列，SAP 自定义字段平铺</h4>
+<p>YY1_F_* 等 SAP 租户自定义字段（约 40 个）直接平铺进主表，<code>prd_work_order</code> 也达 83 列。列数膨胀 → 每行定长部分变大、维护成本高、与 SAP 租户字段耦合。</p>
+<p class="fix">✎ 方案：垂直拆分 <code>product_sap_ext(product_id, 字段…)</code>；主表保留 MES 业务字段 + 常用 SAP 字段。列表页只查主表。</p>
+</div>
+
+<div class="issue p1">
+<h4><span class="tag t1">P1</span> API 日志整包响应入库</h4>
+<p><code>int_api_call_log.response_body</code> 单条最大 20000 字符（截断值过高），462 行已占 3.5MB，长期跑全量同步会快速膨胀。</p>
+<p class="fix">✎ 方案：截断至 2000 字符 + 保留天数 30 天定时清理；或与 payload 一样移入旁表。</p>
+</div>
+
+<div class="issue p1">
+<h4><span class="tag t1">P1</span> 热表索引不足</h4>
+<p><code>eng_bom_item</code>（7698 行/66 列）和 <code>prd_work_order_operation</code>（3285 行）各只有 2 个索引；BOM 展开、工序查询是高频路径。</p>
+<p class="fix">✎ 方案：补 <code>eng_bom_item(bom_id, material_code)</code>、<code>prd_work_order_operation(work_order_id, seq)</code> 复合索引；配合大字段移出后重建聚集索引回收空间。</p>
+</div>
+
+<div class="issue p2">
+<h4><span class="tag t2">P2</span> 领域表归属错位（空表可低成本纠正）</h4>
+<p><code>qua_inspection/qua_inspection_item</code> 等 12 张表为 0 行，但 Java 侧 <code>QualityInspection</code> 实体却在 execution 模块；<code>qa_batch</code> 仅存 productCode/productName 字符串，与 product 无外键。</p>
+<p class="fix">✎ 方案：趁数据为空，把质检实体迁入 quality 模块；qa_batch 增 product_id 外键（有数据后做 RID 回填，成本即刻最低）。</p>
+</div>
+
+<h2>2 · 后端架构</h2>
+
+<div class="issue">
+<h4><span class="tag t0">P0</span> 大事务包裹 SAP HTTP 调用</h4>
+<p><code>SapSyncService.java:106/292</code> 的 <code>@Transactional</code> 覆盖"多页 SAP 拉取 + 逐行落库"全过程；WorkReport/GoodsReceipt/MaterialIssue 三个 Service 的 post() 同样在<b>持锁事务内调中间件 HTTP（read-timeout 30s）</b>。DB 连接池仅 20，一次慢同步可耗尽全部连接，拖垮整个集群。</p>
+<p class="fix">✎ 方案：改为"无事务拉取全量数据 → 分块(如 200 行/批)短事务落库"；post() 拆两段：本地状态变更先提交，HTTP 调用移出事务，失败走补偿/重试队列。</p>
+</div>
+
+<div class="issue">
+<h4><span class="tag t0">P0</span> 定时任务多副本竞态</h4>
+<p><code>SapSyncScheduler.java:20,30</code> 仅用 JVM 内 <code>AtomicBoolean</code> 防重入；<code>SyncJobService.java:139-142</code> 用 check-then-set 判重。双 Pod 下同一同步任务会<b>并发执行两次</b>（曾有 outbox 双 Pod 抢占问题的前车之鉴，但 DistributedLockService 只有 OutboxPublisher 在用）。</p>
+<p class="fix">✎ 方案：Scheduler / SyncJobService / 新增的 outbox 清理 job 全部用现有 <code>DistributedLockService</code>（Redis Lua 原子锁 + renew）包裹。</p>
+</div>
+
+<div class="issue p1">
+<h4><span class="tag t1">P1</span> SapSyncService 巨类（1134 行 / 约 40 方法）</h4>
+<p>单类混装 HTTP 客户端、OData 解析（text/decimal/bool/date 15 个工具方法）、5 类实体映射与 upsert 编排。上次 to_BasicText→to_ProductBasicText 就改了 4 处，改一处漏三处。</p>
+<p class="fix">✎ 方案：拆为 <code>ODataClient</code>(分页/认证) / <code>ODataRowParser</code>(类型转换) / <code>ProductMapper、WorkOrderMapper、BatchMapper、CustomerSupplierMapper</code> / <code>SyncOrchestrator</code>(编排+短事务)。</p>
+</div>
+
+<div class="issue p1">
+<h4><span class="tag t1">P1</span> 同步 N+1 + BOM 删重建</h4>
+<p>循环内逐行 <code>findByCode</code>（SapSyncService.java:154）；BOM/工艺路线每次同步<b>整组 DELETE 后 INSERT</b>（659/673/737/822/873 逐行 saveAndFlush）——7698 行 BOM item 全量同步时写放大严重，这也是当初唯一约束冲突的根源。</p>
+<p class="fix">✎ 方案：先 <code>findByCodeIn(codes)</code> 一次性载入 Map；BOM 改差量更新（比对 itemKey 集合，只删消失项/更新变更项/插入新增项）。</p>
+</div>
+
+<div class="issue p1">
+<h4><span class="tag t1">P1</span> post() 过账模板三处复制</h4>
+<p>WorkReportService:77-111 / GoodsReceiptService:96-135 / MaterialIssueService:87-108 近乎逐行重复（构建凭据→HTTP→结果处理）。</p>
+<p class="fix">✎ 方案：抽取 <code>SapPostingService.post(docType, payload)</code> 统一模板，三处各留差异参数。</p>
+</div>
+
+<div class="issue p2">
+<h4><span class="tag t2">P2</span> 配置硬编码与弱口令</h4>
+<p><code>application.yml:139,191</code> admin-password: admin123；<code>application-prod.yml:79-80,98-99</code> nacos/nacos；中间件 IP、SAP 租户 URL 写在默认配置中；prod actuator show-details: always。</p>
+<p class="fix">✎ 方案：全部改环境变量注入（K8s Secret 已有先例），prod 收紧 actuator 暴露。</p>
+</div>
+
+<div class="issue p2">
+<h4><span class="tag t2">P2</span> 其他</h4>
+<ul>
+<li>web 层跨模块注入：<code>production\web\WorkOrderController.java:30-31</code> 直接注入 ProductRepository，绕过 service；</li>
+<li>命名不一致：integration 用 <code>sap\repository</code>，其余模块用 <code>repo</code>；</li>
+<li>状态机魔法字符串（"DRAFT"/"RELEASED"）散落 service，枚举仅当默认值用；</li>
+<li>关键字搜索 <code>Specification.where(null)</code> 样板在 7 个 service 重复 → 抽 BaseSpecificationHelper。</li>
+</ul>
+</div>
+
+<h2>3 · 前端架构</h2>
+
+<div class="issue">
+<h4><span class="tag t1">P1</span> main.js 成为上帝处理器（317 行）</h4>
+<p>单个全局 click 委托承载全站 50+ 业务 action 分支；分页 loader 映射表重复 3 次。新增页面必须改入口文件，回归风险集中。</p>
+<p class="fix">✎ 方案：action 分发下放各 view（view 返回自己的 handler 注册表），main.js 只保留路由/认证壳层。</p>
+</div>
+
+<div class="issue">
+<h4><span class="tag t1">P1</span> 突尼斯用户会看到中文</h4>
+<p><code>ar-TN.js</code> 仅 217 key（zh/en 各 296），缺 79 个——含全部 status.* 状态翻译与 40+ 产品自定义字段；fallback 是 zh-CN。<b>阿语用户界面直接出现中文。</b></p>
+<p class="fix">✎ 方案：以 en 为基准补齐 ar-TN 79 key；fallback 链改 ar-TN → en。</p>
+</div>
+
+<div class="issue p2">
+<h4><span class="tag t2">P2</span> 其他</h4>
+<ul>
+<li>19 处手写抽屉表单 → 抽 formField/multiLangField 组件（nameZh/nameEn/nameAr 三元语模式重复 5 次）；</li>
+<li><code>request.js:35</code> 401 过期跳登录却提示"用户名或密码错误"；无超时/AbortController；</li>
+<li>menuConfigs 缓存无失效机制，改配置后旧缓存持续生效；</li>
+<li>行内 <code>closest('tr').querySelector('.code')</code> 反模式出现约 15 次。</li>
+</ul>
+</div>
+
+<h2>4 · 实施路线图</h2>
+
+<div class="phase"><div class="num">1</div><div>
+<b>P0 稳定性（预计 1-2 天，改动小、收益大）</b>
+<ul>
+<li>定时任务套分布式锁（Scheduler + SyncJobService）</li>
+<li>SAP 同步事务边界重构：无事务拉取 → 分块短事务落库</li>
+<li>Outbox 清理 job（PUBLISHED 7 天 + 批删 500）+ API 日志截断 2000 字符</li>
+</ul>
+</div></div>
+
+<div class="phase"><div class="num">2</div><div>
+<b>P1 结构优化（预计 3-5 天）</b>
+<ul>
+<li>Flyway V28：sap_payload 移旁表 + 迁移存量数据 + 热表补索引</li>
+<li>SapSyncService 拆分（ODataClient/Parser/Mapper/Orchestrator）+ N+1 批量化 + BOM 差量更新</li>
+<li>post() 模板合并；前端 action 下放 view + ar-TN 补齐 79 key</li>
+</ul>
+</div></div>
+
+<div class="phase"><div class="num">3</div><div>
+<b>P2 治理项（随迭代消化）</b>
+<ul>
+<li>product/product_sap_ext 垂直拆分；quality 模块领域归位</li>
+<li>配置环境变量化（admin/nacos 弱口令）；actuator 收紧</li>
+<li>前端表单组件抽取、401 提示修正、menuConfigs 失效机制</li>
+</ul>
+</div></div>
+
+<div class="note">每阶段独立可发布、可回滚；Phase 1 不动表结构（纯代码），Phase 2 的 Flyway 迁移已考虑 SQL Server 批编译坑（ALTER 与 UPDATE 分批执行）。建议按 Phase 顺序实施，Phase 1 完成后即可消除当前最大的稳定性风险。</div>
+
+</div>
+</body>
+</html>

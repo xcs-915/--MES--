@@ -10,8 +10,8 @@ export function pageHead(section, title, subtitle, actions = '') {
   return `<div class="page-head"><div><h1>${esc(title)}</h1>${subtitle ? `<p class="page-subtitle">${esc(subtitle)}</p>` : ''}</div><div class="page-actions">${actions}</div></div>`;
 }
 
-export function btn(action, label, kind = 'secondary', permission = '') {
-  return `<button class="btn ${kind}" data-action="${action}"${permission ? ` data-permission="${permission}"` : ''}>${label}</button>`;
+export function btn(action, label, kind = 'secondary', permission = '', attrs = '') {
+  return `<button class="btn ${kind}" data-action="${action}"${permission ? ` data-permission="${permission}"` : ''}${attrs ? ' ' + attrs : ''}>${label}</button>`;
 }
 
 export function filterField(id, label, type, options, placeholder) {

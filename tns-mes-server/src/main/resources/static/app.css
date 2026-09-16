@@ -1,4 +1,4 @@
-/* ============================================
+﻿/* ============================================
    TNS-MES Design System
    Enterprise Manufacturing Operations Platform
    White Theme
@@ -288,7 +288,7 @@ a { text-decoration: none; color: inherit; }
 .nav-group.collapsed .nav-children { display: none; }
 .nav-children { padding-left: 28px; }
 .nav-children .nav-link { font-size: 12px; padding: 8px 10px; }
-.nav-children .nav-link::before { content: "·"; margin-right: 6px; color: var(--text-tertiary); }
+.nav-children .nav-link::before { content: "路"; margin-right: 6px; color: var(--text-tertiary); }
 .nav-group-nested { margin: 2px 0; }
 .nav-group-nested .nav-group-toggle { font-size: 12px; padding: 8px 10px; }
 .nav-group-nested .nav-children { padding-left: 18px; }
@@ -846,3 +846,150 @@ a { text-decoration: none; color: inherit; }
 .split-master .data-table tbody tr { cursor: pointer; }
 .split-master .data-table tbody tr.selected { background: rgba(37,99,235,.08) !important; }
 .split-master .data-table tbody tr.selected td { color: var(--text); }
+
+/* ============================================
+   ESOP (Electronic SOP) - editor / preview / review
+   ============================================ */
+.btn.danger { background: rgba(239,68,68,.08); border: 1px solid rgba(220,38,38,.35); color: #DC2626; }
+.btn.danger:hover { background: rgba(239,68,68,.16); border-color: #DC2626; }
+.data-table.compact th, .data-table.compact td { padding: 5px 8px; font-size: 12px; }
+.drawer-section-title { padding: 12px 0 8px; }
+.drawer-section-title h3 { font-size: 14px; color: var(--text); }
+.esop-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 0; border-bottom: 1px dashed var(--border-strong); margin-bottom: 14px; }
+.esop-log-list { display: flex; flex-direction: column; gap: 8px; }
+.esop-log-item { border: 1px solid var(--border-strong); border-radius: var(--r); padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: rgba(255,255,255,.4); }
+.esop-log-item p { width: 100%; margin: 0; font-size: 12px; color: var(--text-muted); }
+.esop-log-meta { font-size: 12px; color: var(--text-muted); }
+.esop-preview { display: flex; flex-direction: column; gap: 12px; }
+.esop-preview-page { border: 1px solid var(--border-strong); border-radius: var(--r); overflow: hidden; background: var(--bg-card-solid); }
+.esop-preview-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-table-header); border-bottom: 1px solid var(--border-strong); }
+.esop-preview-head strong { font-size: 13px; }
+.esop-preview-head .esop-preview-page-no { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+.esop-preview-work { margin: 8px 12px; white-space: pre-wrap; font-size: 12px; color: var(--text); }
+.esop-preview-table { padding: 8px 12px; }
+.esop-preview-table h4 { font-size: 12px; margin: 4px 0 6px; color: var(--text); }
+.esop-preview-steps { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 12px; }
+.esop-preview-step { width: 30%; min-width: 150px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.esop-preview-step img { width: 100%; height: 120px; object-fit: contain; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: #fff; }
+.esop-noimg { height: 120px; border: 1px dashed var(--border-strong); border-radius: var(--r-sm); }
+.esop-preview-remarks { padding: 4px 26px 10px; font-size: 12px; color: var(--text-muted); }
+.esop-editor { display: flex; flex-direction: column; gap: 14px; }
+.esop-editor-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--r-md); box-shadow: var(--shadow); }
+.esop-editor-bar > strong { flex: 1; font-size: 15px; }
+.esop-editor-bar-actions { display: flex; gap: 8px; }
+.esop-editor-body { display: flex; flex-direction: column; gap: 14px; }
+.esop-edit-block, .esop-page-card { display: flex; flex-direction: column; gap: 10px; }
+.esop-edit-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.esop-edit-toolbar > strong { font-size: 14px; }
+.esop-edit-table input { width: 100%; min-width: 60px; height: 28px; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-size: 12px; }
+.esop-edit-table input:focus { border-color: var(--brand); outline: none; }
+.esop-edit-table-box { border: 1px solid var(--border-strong); border-radius: var(--r); padding: 8px 10px 10px; margin-bottom: 8px; background: rgba(255,255,255,.4); }
+.esop-table-title { width: 180px; height: 30px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-weight: 600; }
+.esop-table-columns { flex: 1; min-width: 220px; height: 30px; padding: 0 8px; border: 1px dashed var(--border-strong); border-radius: var(--r-sm); font-size: 12px; color: var(--text-muted); }
+.esop-edit-addline { display: flex; gap: 8px; align-items: center; }
+.esop-edit-addline select { height: 32px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: #fff; }
+.esop-edit-sub { margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--border-strong); }
+.esop-edit-sub strong { font-size: 13px; }
+.esop-page-card { border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 14px 16px; background: var(--bg-card); }
+.esop-page-head { display: flex; align-items: center; justify-content: space-between; }
+.esop-work-label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--text); }
+.esop-work-label textarea { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); resize: vertical; font-family: inherit; font-size: 13px; }
+.esop-step-box { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 8px 10px; margin-bottom: 8px; }
+.esop-step-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.esop-step-form input { height: 30px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-size: 12px; }
+.esop-step-title { width: 220px; font-weight: 600; }
+.esop-step-ops { display: flex; gap: 4px; margin-left: auto; }
+.esop-step-img { max-width: 320px; max-height: 180px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); }
+.esop-upload-btn { position: relative; overflow: hidden; cursor: pointer; }
+.esop-upload-btn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.esop-img-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.esop-img-cell { position: relative; width: 140px; height: 100px; border: 1px solid var(--border-strong); border-radius: var(--r); overflow: hidden; background: #fff; }
+.esop-img-cell img { width: 100%; height: 100%; object-fit: contain; }
+.esop-img-cell .icon-btn { position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,.9); }
+.esop-img-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 140px; height: 100px; border: 1px dashed var(--border-strong); border-radius: var(--r); color: var(--text-muted); font-size: 12px; cursor: pointer; position: relative; }
+.esop-img-add:hover { border-color: var(--brand); color: var(--brand); }
+.esop-page-type { display: inline-block; margin-left: 10px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.esop-page-type.process { background: rgba(124,58,237,.12); color: #7C3AED; }
+.esop-page-type.product { background: rgba(16,185,129,.14); color: #0f9d76; }
+.esop-add-page-group { display: flex; gap: 8px; }
+.esop-flow-label { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 4px; font-size: 12px; font-weight: 500; color: var(--text); }
+.esop-flow-label input { height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-size: 13px; }
+.esop-preview-type { padding: 1px 8px; border-radius: 999px; background: rgba(16,185,129,.14); color: #0f9d76; font-size: 11px; font-weight: 600; }
+.esop-img-add input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.esop-remark-row { display: flex; gap: 8px; margin-bottom: 6px; }
+.esop-remark-row input { flex: 1; height: 30px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-size: 12px; }
+.esop-review-label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
+.esop-review-label textarea { padding: 10px; border: 1px solid var(--border-strong); border-radius: var(--r); resize: vertical; font-family: inherit; }
+
+/* ============================================
+   ESOP live (WYSIWYG) editor — edit on template sheets
+   ============================================ */
+.esop-live { gap: 16px; }
+.esop-live-hint { margin: 0; padding: 0 4px; font-size: 12.5px; color: var(--text-muted); }
+.esop-live-title { flex: 1; height: 34px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-size: 14px; font-weight: 600; background: #fff; }
+.esop-live-title:focus { border-color: var(--brand); outline: none; }
+.esop-live-sheet { position: relative; background: #fff; border: 1px solid #2f2a45; border-radius: var(--r-sm); padding: 14px 16px 16px; box-shadow: 0 3px 14px rgba(30,27,60,.10); }
+.esop-live-sheet table { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
+.esop-live-sheet th, .esop-live-sheet td { border: 1px solid #444; padding: 2px 5px; font-size: 12.5px; text-align: left; vertical-align: middle; word-break: break-word; color: #111; }
+.esop-live-sheet th { background: #f0ecf8; white-space: nowrap; font-weight: 600; text-align: center; }
+.esop-live-sheet td.num, .esop-live-sheet .num { text-align: center; color: #333; white-space: nowrap; }
+.esop-live-sheet td.ops, .esop-live-sheet th.ops { border: none; width: 34px; padding: 0 2px; text-align: center; background: transparent; }
+.esop-live-sheet .icon-btn { width: 24px; height: 24px; padding: 0; }
+.esop-lv-phead th { white-space: nowrap; }
+.esop-lv-phead .logo { font-family: Arial, sans-serif; font-size: 20px; font-weight: 800; letter-spacing: 3px; text-align: center; width: 110px; border: 2px solid #111; color: #111; }
+.esop-lv-phead .ptitle { text-align: center; }
+.esop-lv-phead tr.sub th, .esop-lv-phead tr.sub td { border-color: #888; font-size: 11.5px; }
+.esop-lv-phead .ptitle select.li { font-weight: 700; font-size: 14px; text-align: center; cursor: pointer; }
+input.li, textarea.li, select.li { width: 100%; min-width: 40px; border: 0; background: transparent; color: inherit; font: inherit; padding: 1px 2px; outline: none; }
+.esop-lv-flow label input.li, .esop-lv-remark input.li { flex: 1; width: auto; }
+.esop-lv-step-head input:not(.title) { flex: 1; width: auto; }
+input.li:focus, textarea.li:focus, select.li:focus { background: rgba(124,58,237,.10); box-shadow: inset 0 0 0 1.5px #7C3AED; border-radius: 2px; }
+input.li::placeholder, textarea.li::placeholder { color: #b9b3cc; font-weight: 400; }
+input.li[type="date"] { cursor: pointer; }
+.esop-lv-pageops { position: absolute; top: -13px; right: 12px; display: flex; align-items: center; gap: 8px; padding: 3px 10px; background: var(--bg-card, #fff); border: 1px solid var(--border-strong); border-radius: 999px; box-shadow: var(--shadow); z-index: 2; }
+.esop-lv-pageops strong { font-size: 12.5px; }
+.esop-lv-pageops .num { font-size: 12px; color: var(--text-muted); }
+.esop-lv-pageops .btn { height: 24px; padding: 0 8px; font-size: 12px; }
+.esop-lv-sect { display: flex; align-items: center; gap: 8px; margin: 10px 0 5px; font-size: 13px; font-weight: 700; color: #111; border-left: 4px solid #7C3AED; padding-left: 7px; }
+.esop-lv-sect .btn { height: 26px; padding: 0 8px; font-size: 12px; }
+.esop-lv-grid thead th { background: #f0ecf8; }
+.esop-lv-grid td { height: 24px; }
+.esop-lv-grid .esop-lv-empty { text-align: center; color: #999; height: 30px; }
+.esop-lv-flow { display: flex; gap: 8px; margin: 6px 0; }
+.esop-lv-flow label { flex: 1; display: flex; align-items: center; gap: 6px; border: 1px solid #444; background: #f7f5fd; padding: 3px 8px; font-weight: 600; font-size: 12.5px; color: #111; min-width: 0; }
+.esop-lv-flow label > span { white-space: nowrap; }
+.esop-lv-cols { display: flex; gap: 12px; align-items: flex-start; margin-top: 4px; }
+.esop-lv-col-left { width: 46%; min-width: 0; }
+.esop-lv-col-right { flex: 1; min-width: 0; }
+.esop-lv-block { margin-bottom: 10px; }
+.esop-lv-block-head { display: flex; gap: 6px; align-items: center; margin-bottom: 3px; }
+.esop-lv-block-head input.title { font-weight: 700; flex: 0 0 170px; border-bottom: 1px dashed #999; }
+.esop-lv-block-head .esop-table-columns { flex: 1; min-width: 100px; height: 26px; border: 1px dashed var(--border-strong); border-radius: var(--r-sm); padding: 0 6px; font-size: 12px; color: var(--text-muted); background: #fff; }
+.esop-lv-addline { display: flex; gap: 6px; align-items: center; margin: 4px 0 10px; }
+.esop-lv-addline .btn { height: 28px; padding: 0 10px; font-size: 12px; }
+.esop-lv-addline .esop-preset { height: 28px; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: #fff; font-size: 12px; }
+.esop-lv-work textarea.li { display: block; width: 100%; border: 1px solid #444; background: #fff; padding: 6px 8px; min-height: 56px; resize: vertical; line-height: 1.5; }
+.esop-lv-step { border: 1px solid #333; margin-bottom: 10px; background: #fff; }
+.esop-lv-step-head { display: flex; gap: 6px; align-items: center; background: #333; padding: 3px 6px; }
+.esop-lv-step-head input { border: 0; background: transparent; color: #fff; font: inherit; font-size: 12px; outline: none; min-width: 0; }
+.esop-lv-step-head input.title { font-weight: 700; flex: 0 0 32%; }
+.esop-lv-step-head input:focus { background: rgba(124,58,237,.35); border-radius: 2px; }
+.esop-lv-step-head .icon-btn { color: #fff; background: transparent; border-color: #555; }
+.esop-lv-up { display: flex; align-items: center; gap: 3px; color: #fff; cursor: pointer; font-size: 12px; padding: 2px 6px; border: 1px solid #555; border-radius: var(--r-sm); position: relative; overflow: hidden; white-space: nowrap; }
+.esop-lv-up:hover { border-color: #999; }
+.esop-lv-up input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.esop-lv-step-img { display: block; width: 100%; max-height: 240px; object-fit: contain; border-top: 1px solid #333; background: #fff; }
+.esop-lv-figs { display: flex; flex-wrap: wrap; gap: 8px; }
+.esop-lv-fig { position: relative; margin: 0; width: 31%; border: 1px solid #999; background: #fff; }
+.esop-lv-fig img { display: block; width: 100%; max-height: 150px; object-fit: contain; }
+.esop-lv-fig .icon-btn { position: absolute; top: 3px; right: 3px; background: rgba(255,255,255,.92); }
+.esop-lv-fig-add { width: 31%; min-height: 84px; border: 1px dashed #999; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; color: #888; cursor: pointer; position: relative; overflow: hidden; }
+.esop-lv-fig-add:hover { border-color: var(--brand); color: var(--brand); }
+.esop-lv-fig-add input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.esop-lv-remark { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.esop-lv-remark .num { font-size: 12px; color: #555; }
+.esop-lv-remark input.li { border-bottom: 1px dashed #bbb; }
+.esop-lv-sign th { background: #f0ecf8; }
+.esop-lv-change th { background: #f7f5fd; font-size: 11px; }
+.esop-lv-change td { height: 22px; }
+@media (max-width: 1100px) { .esop-lv-cols { flex-direction: column; } .esop-lv-col-left { width: 100%; } }
