@@ -45,8 +45,12 @@ echo ""
 log "Step 2: 更新 ConfigMap 和 Secret..."
 kubectl apply -f ${DEPLOY_DIR}/01-config-only.yaml
 ok "ConfigMap 更新完成"
-kubectl apply -f ${DEPLOY_DIR}/01-platform-secrets.yaml
-ok "中间件和监控 Secret 更新完成"
+if [ -f ${DEPLOY_DIR}/01-platform-secrets.yaml ]; then
+  kubectl apply -f ${DEPLOY_DIR}/01-platform-secrets.yaml
+  ok "中间件和监控 Secret 更新完成"
+else
+  warn "01-platform-secrets.yaml 不存在, 跳过中间件 Secret (该部署布局未使用)"
+fi
 # 同步应用 Secret (确保 jwt-secret, db-password, redis-password 等注入到 Pod)
 kubectl apply -f ${DEPLOY_DIR}/01-config-secrets.yaml
 ok "Secret 更新完成"
