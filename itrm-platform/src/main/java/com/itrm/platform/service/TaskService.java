@@ -5,22 +5,32 @@ import com.itrm.platform.domain.Requirement;
 import com.itrm.platform.domain.Task;
 import com.itrm.platform.repo.RequirementRepository;
 import com.itrm.platform.repo.TaskRepository;
+import com.itrm.platform.repo.TimeLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 @Service
 public class TaskService {
 
     private final TaskRepository taskRepository;
     private final RequirementRepository requirementRepository;
+    private final TimeLogRepository timeLogRepository;
+    private static final Set<String> TASK_READY_STATUSES = new HashSet<>(Arrays.asList(
+            "PENDING_PLAN", "IN_DEVELOPMENT", "IN_TESTING", "PENDING_RELEASE"
+    ));
 
-    public TaskService(TaskRepository taskRepository, RequirementRepository requirementRepository) {
+    public TaskService(TaskRepository taskRepository, RequirementRepository requirementRepository,
+                       TimeLogRepository timeLogRepository) {
         this.taskRepository = taskRepository;
         this.requirementRepository = requirementRepository;
+        this.timeLogRepository = timeLogRepository;
     }
 
     @Transactional(readOnly = true)
@@ -38,6 +48,12 @@ public class TaskService {
     public Task create(Long requirementId, Task task) {
         Requirement req = requirementRepository.findById(requirementId)
                 .orElseThrow(() -> new BizException(404, "需求不存在"));
+        if (!TASK_READY_STATUSES.contains(req.getStatus())) {
+            throw new BizException(400, "需求接收并进入排期后才能拆分开发任务");
+        }
+        if (task.getTitle() == null || task.getTitle().trim().isEmpty()) {
+            throw new BizException(400, "任务标题不能为空");
+        }
 
         Task newTask = new Task();
         newTask.setRequirementId(requirementId);
@@ -131,6 +147,9 @@ public class TaskService {
     @Transactional
     public void delete(Long id) {
         Task task = get(id);
+        if (timeLogRepository.existsByTaskId(id)) {
+            throw new BizException(400, "该任务已有工时记录，不能删除");
+        }
         Long requirementId = task.getRequirementId();
         taskRepository.delete(task);
         // 更新需求的预计工时总和

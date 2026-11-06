@@ -34,8 +34,8 @@ public class TimeLogController {
     @PostMapping
     @PreAuthorize("hasAuthority('timelog:create')")
     public ApiResponse<TimeLog> create(@RequestBody Map<String, Object> body) {
-        Long requirementId = Long.valueOf(body.get("requirementId").toString());
-        Long taskId = body.get("taskId") != null ? Long.valueOf(body.get("taskId").toString()) : null;
+        Long taskId = body.get("taskId") != null && !body.get("taskId").toString().trim().isEmpty()
+                ? Long.valueOf(body.get("taskId").toString()) : null;
         TimeLog log = new TimeLog();
         log.setWorker((String) body.get("worker"));
         if (body.get("workDate") != null) {
@@ -46,7 +46,7 @@ public class TimeLogController {
         }
         log.setWorkType((String) body.get("workType"));
         log.setDescription((String) body.get("description"));
-        return ApiResponse.ok(timeLogService.create(requirementId, taskId, log));
+        return ApiResponse.ok(timeLogService.create(taskId, log));
     }
 
     @DeleteMapping("/{id}")

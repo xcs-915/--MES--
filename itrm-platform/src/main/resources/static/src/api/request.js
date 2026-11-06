@@ -41,16 +41,14 @@ const statusMessages = {
 // ---------- 核心请求函数 ----------
 
 export async function api(path, options = {}) {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {}),
-  };
+  const isFormData = options.body instanceof FormData;
+  const headers = { ...(isFormData ? {} : { 'Content-Type': 'application/json' }), ...(options.headers || {}) };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const fullUrl = `${baseUrl}${path}`;
   const method = options.method || 'GET';
-  const bodyData = options.body === undefined ? undefined : JSON.stringify(options.body);
+  const bodyData = options.body === undefined ? undefined : (isFormData ? options.body : JSON.stringify(options.body));
   const silent = options.silent === true;
 
   // AbortController 用于超时
@@ -129,6 +127,21 @@ export async function api(path, options = {}) {
     }
     throw err;
   }
+}
+
+export async function apiBlob(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${baseUrl}${path}`, { ...options, headers });
+  if (!res.ok) {
+    let message = statusMessages[res.status] || '下载失败';
+    try { message = (await res.json())?.message || message; } catch {}
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+  return res.blob();
 }
 
 // ---------- 便捷方法 ----------

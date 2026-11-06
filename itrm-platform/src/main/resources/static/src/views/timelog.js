@@ -4,12 +4,12 @@ import { api } from '../api/request.js';
 import { openModal, emptyState, loadingState } from './_ui.js';
 
 const workTypeOptions = [
-  { value: 'dev', label: '开发' },
-  { value: 'test', label: '测试' },
-  { value: 'review', label: '评审' },
-  { value: 'doc', label: '文档' },
-  { value: 'meeting', label: '会议' },
-  { value: 'other', label: '其他' },
+  { value: 'DEV', label: '开发' },
+  { value: 'TEST', label: '测试' },
+  { value: 'REVIEW', label: '评审' },
+  { value: 'DOC', label: '文档' },
+  { value: 'MEETING', label: '会议' },
+  { value: 'OTHER', label: '其他' },
 ];
 
 let currentFilters = { worker: '', startDate: '', endDate: '' };
@@ -23,7 +23,7 @@ export async function renderTimelog() {
   page.innerHTML = `
     <div class="page-container">
       <div class="page-header">
-        <h2>工时管理</h2>
+        <div><h2>工时管理</h2><div class="page-subtitle">工时必须登记到需求拆分的开发任务，并自动回写任务与需求实际工时</div></div>
         <button class="btn primary" data-action="new-log" data-permission="timelog:create">+ 登记工时</button>
       </div>
 
@@ -63,15 +63,23 @@ export async function renderTimelog() {
   `;
 
   bindEvents();
-  loadRequirementsForSelect();
+  await loadRequirementsForSelect();
+  loadLogs();
 }
 
 async function loadRequirementsForSelect() {
   try {
-    const res = await api('/requirements?size=20');
+    const res = await api('/requirements?size=500');
     allRequirements = res?.data?.content || res?.data || [];
+    const taskGroups = await Promise.all(allRequirements.map(req =>
+      api(`/tasks/by-requirement/${req.id}`)
+        .then(result => (result?.data || result || []).map(task => ({ ...task, _reqTitle: req.title, _reqNo: req.reqNo, _requirementId: req.id })))
+        .catch(() => [])
+    ));
+    allTasks = taskGroups.flat();
   } catch (e) {
     allRequirements = [];
+    allTasks = [];
   }
 }
 
@@ -120,6 +128,10 @@ async function loadLogs() {
       ]);
 
       allLogs = logsRes?.data || logsRes || [];
+      allLogs = allLogs.map(log => {
+        const req = allRequirements.find(item => String(item.id) === String(log.requirementId));
+        return { ...log, _reqTitle: req?.title, _reqNo: req?.reqNo };
+      });
       const statsData = statsRes?.data || null;
       if (statsData) {
         stats.totalHours = statsData.totalHours || 0;
@@ -136,7 +148,7 @@ async function loadLogs() {
     } else {
       // 没指定人员，从需求列表聚合
       if (!allRequirements.length) {
-        const res = await api('/requirements?size=20');
+        const res = await api('/requirements?size=500');
         allRequirements = res?.data?.content || res?.data || [];
       }
 
@@ -190,7 +202,7 @@ async function loadLogs() {
               <td>${esc(item.worker || '-')}</td>
               <td>${getWorkTypeLabel(item.workType)}</td>
               <td class="ellipsis" title="${esc(item._reqTitle || '')}">${esc(item._reqTitle || '-')}</td>
-              <td>${esc(item.taskId || '-')}</td>
+              <td>${esc(taskLabel(item.taskId))}</td>
               <td>${esc(item.hours || 0)}</td>
               <td class="ellipsis" title="${esc(item.description || '')}">${esc(item.description || '-')}</td>
               <td class="actions">
@@ -210,7 +222,8 @@ async function loadLogs() {
 }
 
 function getWorkTypeLabel(type) {
-  const found = workTypeOptions.find(w => w.value === type);
+  const normalized = String(type || '').toUpperCase();
+  const found = workTypeOptions.find(w => w.value === normalized);
   return found ? found.label : (type || '-');
 }
 
@@ -241,24 +254,23 @@ function updateStats() {
 }
 
 function openLogForm() {
-  const reqOptions = allRequirements.length
-    ? allRequirements.map(r => `<option value="${esc(r.id)}">${esc(r.reqNo || r.id)} - ${esc(r.title)}</option>`).join('')
-    : `<option value="">暂无需求</option>`;
+  const taskOptions = allRequirements.map(req => {
+    const tasks = allTasks.filter(task => String(task.requirementId) === String(req.id));
+    return tasks.length ? `<optgroup label="${esc(req.reqNo || req.id)} · ${esc(req.title)}">${tasks.map(task => `<option value="${esc(task.id)}">${esc(task.taskNo || task.id)} - ${esc(task.title)}</option>`).join('')}</optgroup>` : '';
+  }).join('');
 
   const bodyHtml = `
     <form class="form">
       <div class="form-row">
-        <label>所属需求 <span class="required">*</span></label>
-        <select name="requirementId" id="log-req" required>
+        <label>开发任务 <span class="required">*</span></label>
+        <select name="taskId" id="log-task" required>
           <option value="">请选择</option>
-          ${reqOptions}
+          ${taskOptions || `<option value="" disabled>暂无可登记工时的任务</option>`}
         </select>
       </div>
       <div class="form-row">
-        <label>关联任务 (可选)</label>
-        <select name="taskId" id="log-task">
-          <option value="">无</option>
-        </select>
+        <label>所属需求</label>
+        <div class="form-readonly" id="log-requirement-hint">选择任务后自动带出</div>
       </div>
       <div class="form-row">
         <label>工作人员 <span class="required">*</span></label>
@@ -290,12 +302,11 @@ function openLogForm() {
     const workerVal = form.worker.value.trim();
     const workDateVal = form.workDate.value;
     const hoursVal = parseFloat(form.hours.value);
-    const reqId = form.requirementId.value;
-    if (!workerVal || !workDateVal || !hoursVal || !reqId) { alert('请填写必填项'); return; }
+    const taskId = form.taskId.value;
+    if (!workerVal || !workDateVal || !hoursVal || !taskId) { alert('请填写必填项'); return; }
 
     const body = {
-      requirementId: reqId,
-      taskId: form.taskId.value || null,
+      taskId,
       worker: workerVal,
       workDate: workDateVal,
       hours: hoursVal,
@@ -307,20 +318,21 @@ function openLogForm() {
     loadLogs();
   }, '保存');
 
-  // 需求切换时加载任务列表
-  const reqSel = modal.querySelector('#log-req');
+  const currentUser = getUser() || {};
+  modal.querySelector('input[name="worker"]').value = currentUser.realName || currentUser.username || '';
+  modal.querySelector('input[name="workDate"]').value = new Date().toISOString().slice(0, 10);
+
   const taskSel = modal.querySelector('#log-task');
-  reqSel.onchange = async () => {
-    const reqId = reqSel.value;
-    taskSel.innerHTML = `<option value="">无</option>`;
-    if (!reqId) return;
-    try {
-      const res = await api(`/tasks/by-requirement/${reqId}`);
-      const tasks = res?.data || res || [];
-      taskSel.innerHTML = `<option value="">无</option>` +
-        tasks.map(t => `<option value="${esc(t.id)}">${esc(t.taskNo || t.id)} - ${esc(t.title)}</option>`).join('');
-    } catch (e) { /* ignore */ }
+  const hint = modal.querySelector('#log-requirement-hint');
+  taskSel.onchange = () => {
+    const task = allTasks.find(item => String(item.id) === String(taskSel.value));
+    hint.textContent = task ? `${task._reqNo || task.requirementId} - ${task._reqTitle || ''}` : '选择任务后自动带出';
   };
+}
+
+function taskLabel(taskId) {
+  const task = allTasks.find(item => String(item.id) === String(taskId));
+  return task ? `${task.taskNo || task.id} - ${task.title}` : (taskId || '-');
 }
 
 async function deleteLog(id) {

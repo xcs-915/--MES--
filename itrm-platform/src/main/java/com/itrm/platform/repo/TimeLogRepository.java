@@ -13,4 +13,6 @@ public interface TimeLogRepository extends JpaRepository<TimeLog, Long>, JpaSpec
     List<TimeLog> findByWorkerOrderByWorkDateDesc(String worker);
 
     List<TimeLog> findByTaskId(Long taskId);
+
+    boolean existsByTaskId(Long taskId);
 }

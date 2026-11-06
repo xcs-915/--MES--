@@ -28,8 +28,8 @@ export async function renderTasks() {
   page.innerHTML = `
     <div class="page-container">
       <div class="page-header">
-        <h2>任务管理</h2>
-        <button class="btn primary" data-action="new-task" data-permission="task:create">+ 新建任务</button>
+        <div><h2>开发任务</h2><div class="page-subtitle">任务由需求评审后拆分而来，此处统一查看所有需求的执行项</div></div>
+        <button class="btn primary" data-action="go-requirements" data-permission="requirement:view">去需求池拆分任务</button>
       </div>
 
       <div class="filter-bar">
@@ -44,7 +44,7 @@ export async function renderTasks() {
       </div>
 
       <div class="table-wrap" id="task-table">
-        ${emptyState('请从需求详情查看任务，或点击"新建任务"创建')}
+          ${emptyState('开发任务需从需求详情中拆分')}
       </div>
 
       <div class="pagination-wrap" id="task-pagination"></div>
@@ -52,12 +52,13 @@ export async function renderTasks() {
   `;
 
   bindEvents();
-  loadRequirementsForSelect();
+  await loadRequirementsForSelect();
+  loadTasks(0);
 }
 
 async function loadRequirementsForSelect() {
   try {
-    const res = await api('/requirements?size=20');
+    const res = await api('/requirements?size=500');
     allRequirements = res?.data?.content || res?.data || [];
   } catch (e) {
     allRequirements = [];
@@ -86,8 +87,8 @@ function bindEvents() {
       $('#f-status').value = '';
       $('#f-assignee').value = '';
       loadTasks(0);
-    } else if (action === 'new-task') {
-      openTaskForm();
+    } else if (action === 'go-requirements') {
+      document.querySelector('[data-view="requirements"]')?.click();
     } else if (action === 'edit-task') {
       openTaskForm(id);
     } else if (action === 'delete-task') {
@@ -103,7 +104,7 @@ async function loadTasks(pageNum) {
 
   if (!allRequirements.length) {
     try {
-      const res = await api('/requirements?size=20');
+      const res = await api('/requirements?size=500');
       allRequirements = res?.data?.content || res?.data || [];
     } catch (e) {
       table.innerHTML = emptyState('请从需求详情查看任务');
@@ -206,7 +207,7 @@ function bindPagination() {
 
 function openTaskForm(id) {
   const isEdit = !!id;
-  const title = isEdit ? '编辑任务' : '新建任务';
+  const title = '编辑开发任务';
 
   const reqOptions = allRequirements.length
     ? allRequirements.map(r => `<option value="${esc(r.id)}">${esc(r.reqNo || r.id)} - ${esc(r.title)}</option>`).join('')
@@ -216,7 +217,7 @@ function openTaskForm(id) {
     <form class="form">
       <div class="form-row">
         <label>所属需求 <span class="required">*</span></label>
-        <select name="requirementId" required>
+        <select name="requirementId" required disabled>
           <option value="">请选择</option>
           ${reqOptions}
         </select>
@@ -271,11 +272,7 @@ function openTaskForm(id) {
       dueDate: form.dueDate.value,
     };
 
-    if (isEdit) {
-      await api(`/tasks/${id}`, { method: 'PUT', body });
-    } else {
-      await api('/tasks', { method: 'POST', body });
-    }
+    await api(`/tasks/${id}`, { method: 'PUT', body });
     loadTasks(currentPage);
   }, '保存');
 

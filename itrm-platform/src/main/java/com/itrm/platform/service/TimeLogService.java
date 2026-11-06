@@ -51,15 +51,17 @@ public class TimeLogService {
     }
 
     @Transactional
-    public TimeLog create(Long requirementId, Long taskId, TimeLog log) {
-        // 验证需求存在
+    public TimeLog create(Long taskId, TimeLog log) {
+        if (taskId == null) {
+            throw new BizException(400, "工时必须关联开发任务");
+        }
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new BizException(404, "任务不存在"));
+        Long requirementId = task.getRequirementId();
         Requirement req = requirementRepository.findById(requirementId)
-                .orElseThrow(() -> new BizException(404, "需求不存在"));
-
-        // 验证任务存在（如果提供了taskId）
-        if (taskId != null) {
-            taskRepository.findById(taskId)
-                    .orElseThrow(() -> new BizException(404, "任务不存在"));
+                .orElseThrow(() -> new BizException(404, "任务所属需求不存在"));
+        if (log.getHours() == null || log.getHours().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BizException(400, "工时必须大于 0");
         }
 
         TimeLog newLog = new TimeLog();
@@ -68,7 +70,7 @@ public class TimeLogService {
         newLog.setWorker(log.getWorker() != null ? log.getWorker() : getCurrentUser());
         newLog.setWorkDate(log.getWorkDate() != null ? log.getWorkDate() : LocalDate.now());
         newLog.setHours(log.getHours());
-        newLog.setWorkType(log.getWorkType() != null ? log.getWorkType() : "DEV");
+        newLog.setWorkType(log.getWorkType() != null ? log.getWorkType().toUpperCase() : "DEV");
         newLog.setDescription(log.getDescription());
         newLog.setCreatedAt(Instant.now());
         newLog.setCreatedBy(getCurrentUser());
@@ -76,17 +78,12 @@ public class TimeLogService {
         TimeLog saved = timeLogRepository.save(newLog);
 
         // 同步更新需求的 actualHours
-        req.setActualHours(req.getActualHours().add(log.getHours()));
+        req.setActualHours(safeHours(req.getActualHours()).add(log.getHours()));
         requirementRepository.save(req);
 
         // 同步更新任务的 actualHours
-        if (taskId != null) {
-            Task task = taskRepository.findById(taskId).orElse(null);
-            if (task != null) {
-                task.setActualHours(task.getActualHours().add(log.getHours()));
-                taskRepository.save(task);
-            }
-        }
+        task.setActualHours(safeHours(task.getActualHours()).add(log.getHours()));
+        taskRepository.save(task);
 
         return saved;
     }
@@ -99,7 +96,7 @@ public class TimeLogService {
         // 同步扣减需求的实际工时
         Requirement req = requirementRepository.findById(log.getRequirementId()).orElse(null);
         if (req != null) {
-            req.setActualHours(req.getActualHours().subtract(log.getHours()));
+            req.setActualHours(safeHours(req.getActualHours()).subtract(log.getHours()).max(BigDecimal.ZERO));
             requirementRepository.save(req);
         }
 
@@ -107,7 +104,7 @@ public class TimeLogService {
         if (log.getTaskId() != null) {
             Task task = taskRepository.findById(log.getTaskId()).orElse(null);
             if (task != null) {
-                task.setActualHours(task.getActualHours().subtract(log.getHours()));
+                task.setActualHours(safeHours(task.getActualHours()).subtract(log.getHours()).max(BigDecimal.ZERO));
                 taskRepository.save(task);
             }
         }
@@ -154,5 +151,9 @@ public class TimeLogService {
         result.put("byDate", byDate);
         result.put("recordCount", logs.size());
         return result;
+    }
+
+    private BigDecimal safeHours(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }

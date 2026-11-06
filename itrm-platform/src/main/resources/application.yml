@@ -4,6 +4,10 @@ server:
     context-path: /itrm
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
   application:
     name: itrm-platform
   datasource:

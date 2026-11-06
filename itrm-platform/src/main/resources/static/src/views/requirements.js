@@ -1,6 +1,6 @@
 import { $, $$, esc, formatDate, formatDateTime } from '../utils/dom.js';
 import { state } from '../store/index.js';
-import { api } from '../api/request.js';
+import { api, apiBlob } from '../api/request.js';
 import { openModal, openDrawer, emptyState, loadingState, pagination } from './_ui.js';
 
 // 支持 context 的查询助手
@@ -37,7 +37,14 @@ const PRIORITY_MAP = {
 };
 
 const SYSTEM_OPTIONS = ['MES', 'WMS', 'SAP', 'OA', 'SCADA'];
-const TYPE_OPTIONS = ['新功能', '功能优化', 'BUG', '接口', '报表'];
+const TYPE_OPTIONS = [
+  { value: 'NEW_FUNC', label: '新功能' },
+  { value: 'FUNC_OPT', label: '功能优化' },
+  { value: 'BUG', label: 'BUG' },
+  { value: 'INTERFACE', label: '接口' },
+  { value: 'REPORT', label: '报表' },
+  { value: 'OTHER', label: '其他' },
+];
 const DEPT_OPTIONS = ['生产部', '质量部', '设备部', '仓储部', 'IT部', '采购部', '销售部', '财务部', '人事部'];
 const PAGE_SIZE = 20;
 
@@ -138,7 +145,7 @@ export async function renderRequirements() {
           </select>
           <select class="form-select" id="f-type" style="width:140px">
             <option value="">全部类型</option>
-            ${TYPE_OPTIONS.map(t => `<option value="${t}">${t}</option>`).join('')}
+            ${TYPE_OPTIONS.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
           </select>
           <select class="form-select" id="f-urgency" style="width:120px">
             <option value="">全部紧急度</option>
@@ -328,14 +335,17 @@ function renderTableRow(item) {
 function renderTypeTag(type) {
   if (!type) return '—';
   const typeMap = {
-    '新功能': 'tag-type-feature',
-    '功能优化': 'tag-type-improvement',
-    'BUG': 'tag-type-bug',
-    '接口': 'tag-type-task',
-    '报表': 'tag-type-task',
+    NEW_FUNC: ['新功能', 'tag-type-feature'],
+    FUNC_OPT: ['功能优化', 'tag-type-improvement'],
+    BUG: ['BUG', 'tag-type-bug'],
+    INTERFACE: ['接口', 'tag-type-task'],
+    REPORT: ['报表', 'tag-type-task'],
+    OTHER: ['其他', 'tag-type-task'],
+    '新功能': ['新功能', 'tag-type-feature'],
+    '功能优化': ['功能优化', 'tag-type-improvement'],
   };
-  const cls = typeMap[type] || 'tag-type-task';
-  return `<span class="tag ${cls}">${esc(type)}</span>`;
+  const [label, cls] = typeMap[type] || [type, 'tag-type-task'];
+  return `<span class="tag ${cls}">${esc(label)}</span>`;
 }
 
 function canEdit(status) {
@@ -681,7 +691,7 @@ function openReqForm(id) {
           <label class="form-label required">需求类型</label>
           <select class="form-select" name="category" required>
             <option value="">请选择</option>
-            ${TYPE_OPTIONS.map(t => `<option value="${t}">${t}</option>`).join('')}
+            ${TYPE_OPTIONS.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -720,6 +730,15 @@ function openReqForm(id) {
         <label class="form-label">备注</label>
         <textarea class="form-textarea" name="remark" rows="2" placeholder="其他补充说明..."></textarea>
       </div>
+      <div class="form-item">
+        <label class="form-label">需求截图与附件</label>
+        <label class="attachment-picker">
+          <input type="file" name="files" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
+          <span class="attachment-picker-icon">↑</span>
+          <span><strong>选择图片或附件</strong><small>支持多选，单个文件最大 20MB</small></span>
+        </label>
+        <div class="attachment-selection" data-file-selection></div>
+      </div>
     </form>
   `;
 
@@ -746,13 +765,17 @@ function openReqForm(id) {
       remark: form.remark.value.trim(),
     };
 
-    if (isEdit) {
-      await api(`/requirements/${id}`, { method: 'PUT', body });
-    } else {
-      await api('/requirements', { method: 'POST', body });
-    }
+    const saved = isEdit
+      ? await api(`/requirements/${id}`, { method: 'PUT', body })
+      : await api('/requirements', { method: 'POST', body });
+    const requirementId = id || saved?.data?.id;
+    const files = [...(form.files.files || [])];
+    if (requirementId && files.length) await uploadRequirementFiles(requirementId, files);
     loadRequirements(currentPage);
   }, '保存');
+
+  const fileInput = modal.querySelector('input[name="files"]');
+  fileInput?.addEventListener('change', () => renderSelectedFiles(modal, [...fileInput.files]));
 
   // 编辑时加载数据
   if (isEdit) {
@@ -818,17 +841,19 @@ async function openReqDetail(id) {
   const body = drawer.querySelector('.drawer-body');
 
   try {
-    const [reqRes, approvalRes, changeRes, tasksRes] = await Promise.all([
+    const [reqRes, approvalRes, changeRes, tasksRes, attachmentsRes] = await Promise.all([
       api(`/requirements/${id}`),
       api(`/requirements/${id}/approval-records`).catch(() => ({ data: [] })),
       api(`/requirements/${id}/change-logs`).catch(() => ({ data: [] })),
       api(`/tasks/by-requirement/${id}`).catch(() => ({ data: [] })),
+      api(`/requirements/${id}/attachments`).catch(() => ({ data: [] })),
     ]);
 
     const req = reqRes?.data || reqRes || {};
     const approvalRecords = approvalRes?.data || approvalRes || [];
     const changeLogs = changeRes?.data || changeRes || [];
     const tasks = tasksRes?.data || tasksRes || [];
+    const attachments = attachmentsRes?.data || attachmentsRes || [];
 
     // 替换 drawer 标题为需求编号 + 标题
     const headerTitle = drawer.querySelector('.drawer-title');
@@ -880,7 +905,7 @@ async function openReqDetail(id) {
           ${renderChangeTab(changeLogs)}
         </div>
         <div class="tab-panel" data-tab-panel="attachments" style="display:none">
-          ${renderAttachmentsTab(req)}
+          ${renderAttachmentsTab(attachments, req.id)}
         </div>
       </div>
     `;
@@ -902,6 +927,8 @@ async function openReqDetail(id) {
 
     bindDetailActions(req, drawer);
     bindTaskTabActions(req, drawer);
+    bindAttachmentActions(req, drawer);
+    loadAttachmentPreviews(req.id, drawer);
   } catch (e) {
     body.innerHTML = emptyState(e.message || '加载失败');
   }
@@ -1284,9 +1311,9 @@ function openUpdateProgressDialog(id, drawer) {
   openModal('更新进度', bodyHtml, async (overlay) => {
     const form = overlay.querySelector('form');
     const progress = parseInt(form.progress.value) || 0;
-    await api(`/requirements/${id}`, {
+    await api(`/requirements/${id}/progress`, {
       method: 'PUT',
-      body: { progress, progressRemark: form.progressRemark.value.trim() },
+      body: { progress },
     });
     drawer.remove();
     loadRequirements(currentPage);
@@ -1296,10 +1323,11 @@ function openUpdateProgressDialog(id, drawer) {
 // ==================== 任务列表 Tab ====================
 
 function renderTasksTab(tasks, req) {
+  const canSplit = ['PENDING_PLAN', 'IN_DEVELOPMENT', 'IN_TESTING', 'PENDING_RELEASE'].includes(req.status);
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:500;color:var(--it-color-text-primary)">任务列表</div>
-      <button class="btn btn-primary btn-sm" data-action="add-task" data-permission="task:create">+ 新增任务</button>
+      <div><div style="font-size:13px;font-weight:500;color:var(--it-color-text-primary)">开发任务</div><div style="font-size:12px;color:var(--it-color-text-tertiary);margin-top:3px">任务从已接收的需求中拆分，工时将汇总到任务和需求</div></div>
+      ${canSplit ? `<button class="btn btn-primary btn-sm" data-action="add-task" data-permission="task:create">+ 拆分任务</button>` : ''}
     </div>
     ${tasks.length ? `
       <table class="data-table" style="font-size:12px">
@@ -1322,7 +1350,7 @@ function renderTasksTab(tasks, req) {
           `).join('')}
         </tbody>
       </table>
-    ` : `<div class="empty-state" style="padding:40px 20px"><div class="empty-state-title">暂无任务</div><div class="empty-state-desc">点击"新增任务"创建任务分解</div></div>`}
+    ` : `<div class="empty-state" style="padding:40px 20px"><div class="empty-state-title">暂无开发任务</div><div class="empty-state-desc">${canSplit ? '点击“拆分任务”创建开发任务' : '需求接收并进入排期后可拆分开发任务'}</div></div>`}
   `;
 }
 
@@ -1449,36 +1477,119 @@ function renderChangeTab(logs) {
 
 // ==================== 附件 Tab ====================
 
-function renderAttachmentsTab(req) {
-  const attachments = req.attachments || [];
+function renderAttachmentsTab(attachments, requirementId) {
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:500;color:var(--it-color-text-primary)">附件列表</div>
-      <button class="btn btn-primary btn-sm" data-action="upload-attachment">+ 上传附件</button>
+      <div><div style="font-size:13px;font-weight:500;color:var(--it-color-text-primary)">图片与附件</div><div style="font-size:12px;color:var(--it-color-text-tertiary);margin-top:3px">需求截图可在此预览，其他文件可下载</div></div>
+      <button class="btn btn-primary btn-sm" data-action="upload-attachment" data-permission="requirement:edit">+ 上传</button>
+      <input type="file" data-attachment-input hidden multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
     </div>
     ${attachments.length ? `
-      <table class="data-table" style="font-size:12px">
-        <thead><tr>
-          <th>文件名</th>
-          <th style="width:80px">大小</th>
-          <th style="width:70px">上传人</th>
-          <th style="width:130px">上传时间</th>
-          <th style="width:80px;text-align:right">操作</th>
-        </tr></thead>
-        <tbody>
-          ${attachments.map(att => `
-            <tr>
-              <td>${esc(att.fileName || att.name || '—')}</td>
-              <td>${esc(att.fileSize || att.size || '—')}</td>
-              <td>${esc(att.uploader || '—')}</td>
-              <td style="color:var(--it-color-text-tertiary)">${formatDateTime(att.uploadTime || att.createdAt)}</td>
-              <td style="text-align:right">
-                <button class="btn btn-ghost btn-sm">下载</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+      <div class="attachment-grid">
+        ${attachments.map(att => `<article class="attachment-card">
+          <div class="attachment-preview ${att.image ? 'is-image' : ''}">
+            ${att.image ? `<img alt="${esc(att.fileName)}" data-attachment-preview="${esc(att.id)}" />` : `<span>${fileExtension(att.fileName)}</span>`}
+          </div>
+          <div class="attachment-meta"><strong title="${esc(att.fileName)}">${esc(att.fileName)}</strong><small>${formatFileSize(att.fileSize)} · ${esc(att.uploadedBy || '—')}</small><small>${formatDateTime(att.uploadedAt)}</small></div>
+          <div class="attachment-actions">
+            <button class="btn btn-ghost btn-sm" data-action="download-attachment" data-id="${esc(att.id)}" data-name="${esc(att.fileName)}">下载</button>
+            <button class="btn btn-ghost btn-sm" data-action="delete-attachment" data-id="${esc(att.id)}" data-permission="requirement:edit">删除</button>
+          </div>
+        </article>`).join('')}
+      </div>
     ` : `<div class="empty-state" style="padding:40px 20px"><div class="empty-state-title">暂无附件</div><div class="empty-state-desc">点击"上传附件"添加相关文件</div></div>`}
   `;
+}
+
+function renderSelectedFiles(modal, files) {
+  const wrap = modal.querySelector('[data-file-selection]');
+  if (!wrap) return;
+  wrap.innerHTML = files.map(file => `
+    <div class="selected-file">
+      <span class="selected-file-icon">${file.type?.startsWith('image/') ? '图' : fileExtension(file.name)}</span>
+      <span><strong>${esc(file.name)}</strong><small>${formatFileSize(file.size)}</small></span>
+    </div>
+  `).join('');
+}
+
+async function uploadRequirementFiles(requirementId, files) {
+  for (const file of files) {
+    if (file.size > 20 * 1024 * 1024) throw new Error(`${file.name} 超过 20MB 限制`);
+    const data = new FormData();
+    data.append('file', file);
+    await api(`/requirements/${requirementId}/attachments`, { method: 'POST', body: data, timeout: 60000 });
+  }
+}
+
+function bindAttachmentActions(req, drawer) {
+  const body = drawer.querySelector('.drawer-body');
+  const input = body.querySelector('[data-attachment-input]');
+  const uploadButton = body.querySelector('[data-action="upload-attachment"]');
+  if (uploadButton && input) {
+    uploadButton.onclick = () => input.click();
+    input.onchange = async () => {
+      try {
+        const files = [...input.files];
+        if (!files.length) return;
+        uploadButton.disabled = true;
+        uploadButton.textContent = '上传中...';
+        await uploadRequirementFiles(req.id, files);
+        drawer.remove();
+        openReqDetail(req.id);
+      } catch (e) {
+        alert(e.message || '上传失败');
+        uploadButton.disabled = false;
+        uploadButton.textContent = '+ 上传';
+      }
+    };
+  }
+
+  body.querySelectorAll('[data-action="download-attachment"]').forEach(button => {
+    button.onclick = async () => {
+      try {
+        const blob = await apiBlob(`/requirements/${req.id}/attachments/${button.dataset.id}/content?download=true`);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = button.dataset.name || '附件';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (e) { alert(e.message || '下载失败'); }
+    };
+  });
+
+  body.querySelectorAll('[data-action="delete-attachment"]').forEach(button => {
+    button.onclick = async () => {
+      if (!confirm('确定删除该附件？')) return;
+      try {
+        await api(`/requirements/${req.id}/attachments/${button.dataset.id}`, { method: 'DELETE' });
+        drawer.remove();
+        openReqDetail(req.id);
+      } catch (e) { alert(e.message || '删除失败'); }
+    };
+  });
+}
+
+async function loadAttachmentPreviews(requirementId, drawer) {
+  const images = [...drawer.querySelectorAll('[data-attachment-preview]')];
+  await Promise.all(images.map(async image => {
+    try {
+      const blob = await apiBlob(`/requirements/${requirementId}/attachments/${image.dataset.attachmentPreview}/content`);
+      const url = URL.createObjectURL(blob);
+      image.src = url;
+      image.onload = () => URL.revokeObjectURL(url);
+    } catch { image.closest('.attachment-preview')?.classList.add('preview-error'); }
+  }));
+}
+
+function formatFileSize(size) {
+  const bytes = Number(size || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function fileExtension(name) {
+  const ext = String(name || '').split('.').pop();
+  return ext && ext !== name ? ext.slice(0, 4).toUpperCase() : 'FILE';
 }

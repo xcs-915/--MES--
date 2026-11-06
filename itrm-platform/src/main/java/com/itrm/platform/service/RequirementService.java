@@ -23,9 +23,19 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 @Service
 public class RequirementService {
+
+    private static final Set<String> CATEGORIES = new HashSet<>(Arrays.asList(
+            "NEW_FUNC", "FUNC_OPT", "BUG", "INTERFACE", "REPORT", "OTHER"
+    ));
+    private static final Set<String> SYSTEMS = new HashSet<>(Arrays.asList(
+            "MES", "WMS", "SAP", "OA", "SCADA", "OTHER"
+    ));
 
     private final RequirementRepository requirementRepository;
     private final TaskRepository taskRepository;
@@ -102,6 +112,7 @@ public class RequirementService {
 
     @Transactional
     public Requirement create(Requirement request) {
+        validateInput(request);
         Requirement req = new Requirement();
         req.setReqNo(generateReqNo());
         req.setTitle(request.getTitle());
@@ -144,6 +155,7 @@ public class RequirementService {
         if (!"DRAFT".equals(req.getStatus())) {
             throw new BizException(400, "只有草稿状态的需求可以修改");
         }
+        validateInput(request);
         req.setTitle(request.getTitle());
         req.setCategory(request.getCategory());
         req.setUrgency(request.getUrgency());
@@ -160,6 +172,18 @@ public class RequirementService {
         req.setTags(request.getTags());
         req.setRemark(request.getRemark());
         return requirementRepository.save(req);
+    }
+
+    private void validateInput(Requirement request) {
+        if (request == null || !StringUtils.hasText(request.getTitle())) {
+            throw new BizException(400, "需求标题不能为空");
+        }
+        if (!CATEGORIES.contains(request.getCategory())) {
+            throw new BizException(400, "需求类型无效");
+        }
+        if (!SYSTEMS.contains(request.getBelongSystem())) {
+            throw new BizException(400, "所属系统无效");
+        }
     }
 
     @Transactional
