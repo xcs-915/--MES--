@@ -10,7 +10,9 @@ import { $, esc } from '../utils/dom.js';
 const statusMap = {
   DRAFT: '草稿',
   PENDING_RECEIVE: '待接收',
-  PENDING_PLAN: '待排期',
+  PENDING_DOCUMENT: '待完善文档',
+  PENDING_APPROVAL: '待审批',
+  APPROVED: '已审批待排期',
   IN_DEVELOPMENT: '开发中',
   IN_TESTING: '测试中',
   PENDING_RELEASE: '待发布',

@@ -70,7 +70,7 @@ export async function renderTimelog() {
 async function loadRequirementsForSelect() {
   try {
     const res = await api('/requirements?size=500');
-    allRequirements = res?.data?.content || res?.data || [];
+    allRequirements = res?.data?.items || res?.data?.content || [];
     const taskGroups = await Promise.all(allRequirements.map(req =>
       api(`/tasks/by-requirement/${req.id}`)
         .then(result => (result?.data || result || []).map(task => ({ ...task, _reqTitle: req.title, _reqNo: req.reqNo, _requirementId: req.id })))
@@ -149,7 +149,7 @@ async function loadLogs() {
       // 没指定人员，从需求列表聚合
       if (!allRequirements.length) {
         const res = await api('/requirements?size=500');
-        allRequirements = res?.data?.content || res?.data || [];
+        allRequirements = res?.data?.items || res?.data?.content || [];
       }
 
       const logPromises = allRequirements.map(req =>

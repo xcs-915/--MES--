@@ -2,7 +2,7 @@ import { $, esc, formatDate } from '../utils/dom.js';
 import { api } from '../api/request.js';
 import { emptyState, showToast } from './_ui.js';
 
-const statusNames = { DRAFT:'草稿', PENDING_RECEIVE:'待接收', PENDING_PLAN:'待排期', IN_DEVELOPMENT:'开发中', IN_TESTING:'测试中', PENDING_RELEASE:'待发布', COMPLETED:'已完成', REJECTED:'已驳回' };
+const statusNames = { DRAFT:'草稿', PENDING_RECEIVE:'待接收', PENDING_DOCUMENT:'待完善文档', PENDING_APPROVAL:'待审批', APPROVED:'已审批待排期', IN_DEVELOPMENT:'开发中', IN_TESTING:'测试中', PENDING_RELEASE:'待发布', COMPLETED:'已完成', REJECTED:'已驳回' };
 
 export async function renderSchedule() {
   const page = $('#page');
@@ -29,7 +29,7 @@ function renderKpis(items) {
   const planned = items.filter(x => x.plannedStartDate && x.plannedEndDate);
   const overdue = planned.filter(x => x.plannedEndDate < today && !['COMPLETED','REJECTED'].includes(x.status));
   const owners = new Set(planned.map(x => x.devOwner).filter(Boolean));
-  const noPlan = items.filter(x => x.status === 'PENDING_PLAN' || (x.status === 'IN_DEVELOPMENT' && !x.plannedEndDate));
+  const noPlan = items.filter(x => x.status === 'APPROVED' || (x.status === 'IN_DEVELOPMENT' && !x.plannedEndDate));
   $('#schedule-kpis').innerHTML = [
     ['计划中需求', planned.length, 'blue', '已有起止日期'], ['逾期风险', overdue.length, overdue.length?'red':'green', '计划结束已过期'],
     ['参与人员', owners.size, 'violet', '当前排期负责人'], ['待排期', noPlan.length, noPlan.length?'amber':'green', '需要补充计划']

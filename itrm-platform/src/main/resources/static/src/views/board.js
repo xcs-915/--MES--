@@ -6,7 +6,9 @@ import { openDrawer, loadingState } from './_ui.js';
 
 const boardColumns = [
   { key: 'PENDING_RECEIVE', label: '待接收',  dot: 'pending',    color: '#94a3b8' },
-  { key: 'PENDING_PLAN',    label: '待排期',  dot: 'backlog',    color: '#3b82f6' },
+  { key: 'PENDING_DOCUMENT',label: '待完善',  dot: 'backlog',    color: '#8b5cf6' },
+  { key: 'PENDING_APPROVAL',label: '待审批',  dot: 'backlog',    color: '#a855f7' },
+  { key: 'APPROVED',        label: '待排期',  dot: 'backlog',    color: '#6366f1' },
   { key: 'IN_DEVELOPMENT',  label: '开发中',  dot: 'developing', color: '#8b5cf6' },
   { key: 'IN_TESTING',      label: '测试中',  dot: 'testing',    color: '#f97316' },
   { key: 'PENDING_RELEASE', label: '待发布',  dot: 'ready',      color: '#06b6d4' },
@@ -21,14 +23,7 @@ const priorityMap = {
 };
 
 // 状态流转映射（简易版拖拽：点击按钮移动到下一状态）
-const statusFlow = {
-  PENDING_RECEIVE: { next: 'PENDING_PLAN',    nextLabel: '接收' },
-  PENDING_PLAN:    { next: 'IN_DEVELOPMENT',  nextLabel: '开始开发' },
-  IN_DEVELOPMENT:  { next: 'IN_TESTING',      nextLabel: '转测试' },
-  IN_TESTING:      { next: 'PENDING_RELEASE', nextLabel: '测试完成' },
-  PENDING_RELEASE: { next: 'COMPLETED',       nextLabel: '发布完成' },
-  COMPLETED:       { next: null,              nextLabel: '' },
-};
+const statusFlow = {};
 
 // ==================== 渲染入口 ====================
 
@@ -106,6 +101,9 @@ function bindBoardEvents() {
     } else if (action === 'move-prev') {
       const id = btn.dataset.id;
       moveToPrevStatus(id, btn);
+    } else if (action === 'open-requirement') {
+      sessionStorage.setItem('itrm_current_req_id', btn.dataset.id);
+      document.querySelector('[data-view="requirements"]')?.click();
     }
   });
 
@@ -139,7 +137,7 @@ async function loadBoardData() {
   try {
     // 获取所有需求（不分页，获取全部用于看板展示）
     const res = await api('/requirements?size=200');
-    const requirements = res?.data?.content || res?.data || [];
+    const requirements = res?.data?.items || res?.data?.content || [];
 
     // 按状态分组
     const grouped = {};
@@ -194,9 +192,6 @@ function renderCard(req, columnStatus) {
   const progress = req.progress || 0;
   const dueDate = req.plannedEndDate || req.devPlannedEnd || '';
 
-  const flow = statusFlow[columnStatus] || { next: null, prev: null };
-  const prevStatus = getPrevStatus(columnStatus);
-
   return `
     <div class="kanban-card" data-id="${esc(req.id)}">
       <div class="kanban-card-header">
@@ -237,16 +232,7 @@ function renderCard(req, columnStatus) {
       </div>
 
       <div class="card-actions" style="display:flex;gap:4px;padding-top:8px;border-top:1px solid var(--it-color-border-light);opacity:0;transition:opacity .15s ease">
-        ${prevStatus ? `
-          <button class="btn" data-action="move-prev" data-id="${esc(req.id)}" data-permission="board:move" style="flex:1;font-size:11px;padding:4px 8px;background:transparent;border:1px solid var(--it-color-border);color:var(--it-color-text-tertiary)" title="移到上一列">
-            ← 上一步
-          </button>
-        ` : '<span style="flex:1"></span>'}
-        ${flow.next ? `
-          <button class="btn" data-action="move-next" data-id="${esc(req.id)}" data-permission="board:move" style="flex:1;font-size:11px;padding:4px 8px;background:var(--it-color-primary-bg);border:1px solid var(--it-color-primary-lighter);color:var(--it-color-primary)" title="移到下一列">
-            下一步 →
-          </button>
-        ` : '<span style="flex:1"></span>'}
+        <button class="btn" data-action="open-requirement" data-id="${esc(req.id)}" style="flex:1;font-size:11px;padding:4px 8px;background:var(--it-color-primary-bg);border:1px solid var(--it-color-primary-lighter);color:var(--it-color-primary)">打开需求子页 →</button>
       </div>
     </div>
   `;

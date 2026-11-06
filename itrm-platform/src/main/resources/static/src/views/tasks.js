@@ -32,6 +32,9 @@ export async function renderTasks() {
         <button class="btn primary" data-action="go-requirements" data-permission="requirement:view">去需求池拆分任务</button>
       </div>
 
+      <div class="task-origin-banner"><span class="task-origin-icon">↳</span><div><strong>任务从需求来</strong><p>需求审批通过并排期后，在需求子页的“开发任务”页签中拆分；本页用于跨需求跟踪执行。</p></div></div>
+      <div class="task-kpis" id="task-kpis"></div>
+
       <div class="filter-bar">
         <input type="text" id="f-keyword" placeholder="搜索任务标题、编号..." />
         <select id="f-status">
@@ -59,7 +62,7 @@ export async function renderTasks() {
 async function loadRequirementsForSelect() {
   try {
     const res = await api('/requirements?size=500');
-    allRequirements = res?.data?.content || res?.data || [];
+    allRequirements = res?.data?.items || res?.data?.content || [];
   } catch (e) {
     allRequirements = [];
   }
@@ -93,6 +96,9 @@ function bindEvents() {
       openTaskForm(id);
     } else if (action === 'delete-task') {
       if (confirm('确定要删除这条任务吗？')) deleteTask(id);
+    } else if (action === 'view-task-requirement') {
+      sessionStorage.setItem('itrm_current_req_id', btn.dataset.requirementId);
+      document.querySelector('[data-view="requirements"]')?.click();
     }
   });
 }
@@ -105,7 +111,7 @@ async function loadTasks(pageNum) {
   if (!allRequirements.length) {
     try {
       const res = await api('/requirements?size=500');
-      allRequirements = res?.data?.content || res?.data || [];
+      allRequirements = res?.data?.items || res?.data?.content || [];
     } catch (e) {
       table.innerHTML = emptyState('请从需求详情查看任务');
       return;
@@ -136,6 +142,7 @@ async function loadTasks(pageNum) {
       const a = currentFilters.assignee.toLowerCase();
       filtered = filtered.filter(t => (t.assignee || '').toLowerCase().includes(a));
     }
+    updateTaskSummary(filtered);
 
     const total = filtered.length;
     const size = 20;
@@ -162,7 +169,7 @@ function renderTaskTable(items) {
   table.innerHTML = `<table class="data-table">
     <thead><tr>
       <th>任务编号</th>
-      <th>任务标题</th>
+      <th style="min-width:220px">任务</th>
       <th>所属需求</th>
       <th>状态</th>
       <th>紧急程度</th>
@@ -177,11 +184,11 @@ function renderTaskTable(items) {
       ${items.map(item => `
         <tr data-id="${esc(item.id)}">
           <td>${esc(item.taskNo || item.id)}</td>
-          <td class="ellipsis" title="${esc(item.title)}">${esc(item.title)}</td>
-          <td class="ellipsis" title="${esc(item._reqTitle || '')}">${esc(item._reqTitle || '-')}</td>
+          <td><div class="task-title-cell"><strong>${esc(item.title)}</strong><small>${esc(item.description || '暂无任务说明')}</small></div></td>
+          <td><button class="requirement-chip" data-action="view-task-requirement" data-requirement-id="${esc(item.requirementId)}"><span>${esc(item._reqNo || '')}</span>${esc(item._reqTitle || '-')}</button></td>
           <td>${statusPill(item.status)}</td>
           <td>${priorityPill(item.priority || item.urgency)}</td>
-          <td>${esc(item.assignee || '-')}</td>
+          <td>${item.assignee ? `<div class="person-cell"><span class="avatar avatar-sm">${esc(item.assignee[0])}</span><strong>${esc(item.assignee)}</strong></div>` : '—'}</td>
           <td>${esc(item.estimatedHours || '-')}</td>
           <td>${esc(item.actualHours || '-')}</td>
           <td><div style="display:flex;align-items:center;min-width:80px">${progressBar(item.progress || 0)}</div></td>
@@ -194,6 +201,18 @@ function renderTaskTable(items) {
       `).join('')}
     </tbody>
   </table>`;
+}
+
+function updateTaskSummary(items) {
+  const wrap = $('#task-kpis'); if (!wrap) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const metrics = [
+    ['任务总数', items.length, '全部开发任务', 'blue'],
+    ['进行中', items.filter(item => item.status === 'IN_PROGRESS').length, '当前正在开发', 'violet'],
+    ['待测试', items.filter(item => item.status === 'TESTING').length, '等待测试验证', 'amber'],
+    ['逾期风险', items.filter(item => item.dueDate && item.dueDate < today && item.status !== 'DONE').length, '超过截止日期', 'red'],
+  ];
+  wrap.innerHTML = metrics.map(([label, value, note, tone]) => `<div class="task-kpi ${tone}"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join('');
 }
 
 function bindPagination() {

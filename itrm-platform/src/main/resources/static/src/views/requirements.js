@@ -11,7 +11,9 @@ const $qa = (sel, ctx) => [...(ctx || document).querySelectorAll(sel)];
 
 let STATUS_LIST = [
   { value: 'PENDING_RECEIVE', label: '待接收' },
-  { value: 'PENDING_PLAN', label: '待排期' },
+  { value: 'PENDING_DOCUMENT', label: '待完善文档' },
+  { value: 'PENDING_APPROVAL', label: '待审批' },
+  { value: 'APPROVED', label: '已审批待排期' },
   { value: 'IN_DEVELOPMENT', label: '开发中' },
   { value: 'IN_TESTING', label: '测试中' },
   { value: 'PENDING_RELEASE', label: '待发布' },
@@ -21,7 +23,9 @@ let STATUS_LIST = [
 const STATUS_MAP = {
   DRAFT: { label: '草稿', cls: 'badge-status-pending' },
   PENDING_RECEIVE: { label: '待接收', cls: 'badge-status-pending' },
-  PENDING_PLAN: { label: '待排期', cls: 'badge-status-backlog' },
+  PENDING_DOCUMENT: { label: '待完善文档', cls: 'badge-status-backlog' },
+  PENDING_APPROVAL: { label: '待审批', cls: 'badge-status-backlog' },
+  APPROVED: { label: '已审批待排期', cls: 'badge-status-ready' },
   IN_DEVELOPMENT: { label: '开发中', cls: 'badge-status-developing' },
   IN_TESTING: { label: '测试中', cls: 'badge-status-testing' },
   PENDING_RELEASE: { label: '待发布', cls: 'badge-status-ready' },
@@ -199,7 +203,12 @@ export async function renderRequirements() {
   `;
 
   bindPageEvents();
-  loadRequirements(0);
+  await loadRequirements(0);
+  const directId = sessionStorage.getItem('itrm_current_req_id');
+  if (directId) {
+    sessionStorage.removeItem('itrm_current_req_id');
+    openReqDetail(directId);
+  }
 }
 
 // ==================== 数据加载 ====================
@@ -281,7 +290,7 @@ function renderTable(items) {
         <th style="width:90px">开发负责人</th>
         <th style="width:140px">进度</th>
         <th style="width:110px">创建时间</th>
-        <th style="width:120px;text-align:right;padding-right:16px">操作</th>
+        <th style="width:280px;text-align:right;padding-right:16px">流程操作</th>
       </tr>
     </thead>
     <tbody>
@@ -319,13 +328,8 @@ function renderTableRow(item) {
       <td style="color:var(--it-color-text-tertiary);font-size:12px">${formatDate(item.createdAt)}</td>
       <td style="text-align:right;padding-right:16px">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
-          <button class="btn btn-ghost btn-sm" data-action="view-req" data-id="${id}">查看</button>
-          ${canEdit(item.status) ? `<button class="btn btn-ghost btn-sm" data-action="edit-req" data-id="${id}" data-permission="requirement:edit">编辑</button>` : ''}
-          <div class="dropdown" style="display:inline-block">
-            <button class="btn btn-ghost btn-sm" data-action="more-req" data-id="${id}">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-            </button>
-          </div>
+          <button class="btn btn-ghost btn-sm" data-action="view-req" data-id="${id}">详情</button>
+          ${renderListActions(item)}
         </div>
       </td>
     </tr>
@@ -349,7 +353,27 @@ function renderTypeTag(type) {
 }
 
 function canEdit(status) {
-  return status === 'DRAFT' || status === 'PENDING_RECEIVE';
+  return false;
+}
+
+function actionButton(action, id, label, primary = false, permission = '') {
+  return `<button class="btn ${primary ? 'btn-primary' : 'btn-secondary'} btn-sm" data-action="${action}" data-id="${esc(id)}" ${permission ? `data-permission="${permission}"` : ''}>${label}</button>`;
+}
+
+function renderListActions(item) {
+  const id = item.id;
+  switch (item.status) {
+    case 'DRAFT': return actionButton('submit-req', id, '提交', true, 'requirement:submit') + actionButton('change-req', id, '变更', false, 'requirement:change');
+    case 'PENDING_RECEIVE': return actionButton('receive-req', id, '接收', true, 'requirement:receive') + actionButton('reject-req', id, '驳回', false, 'requirement:review');
+    case 'PENDING_DOCUMENT': return actionButton('document-req', id, '完善文档', true, 'requirement:review') + actionButton('submit-approval-req', id, '提交审批', false, 'requirement:review') + actionButton('change-req', id, '变更', false, 'requirement:change');
+    case 'PENDING_APPROVAL': return actionButton('approve-req', id, '审批', true, 'requirement:review');
+    case 'APPROVED': return actionButton('plan-req', id, '排期分配', true, 'requirement:plan') + actionButton('change-req', id, '变更', false, 'requirement:change');
+    case 'IN_DEVELOPMENT': return actionButton('start-testing-req', id, '转测试', true, 'test:transition') + actionButton('change-req', id, '变更', false, 'requirement:change');
+    case 'IN_TESTING': return actionButton('finish-testing-req', id, '测试通过', true, 'test:transition') + actionButton('change-req', id, '变更', false, 'requirement:change');
+    case 'PENDING_RELEASE': return actionButton('release-success-req', id, '确认发布', true, 'requirement:release') + actionButton('change-req', id, '变更', false, 'requirement:change');
+    case 'REJECTED': return actionButton('change-req', id, '变更后重提', true, 'requirement:change');
+    default: return '';
+  }
 }
 
 // ==================== 看板视图（简化版） ====================
@@ -450,11 +474,21 @@ function bindPageEvents() {
       case 'new-req':
         openReqForm();
         break;
-      case 'edit-req':
-        openReqForm(id);
-        break;
       case 'view-req':
         openReqDetail(id);
+        break;
+      case 'submit-req':
+      case 'receive-req':
+      case 'reject-req':
+      case 'document-req':
+      case 'submit-approval-req':
+      case 'approve-req':
+      case 'change-req':
+      case 'plan-req':
+      case 'start-testing-req':
+      case 'finish-testing-req':
+      case 'release-success-req':
+        handleListAction(action, id);
         break;
       case 'more-req':
         e.stopPropagation();
@@ -488,6 +522,27 @@ function bindPageEvents() {
       btn.classList.add('active');
       loadRequirements(currentPage);
     });
+  }
+}
+
+function handleListAction(action, id) {
+  const listContext = { remove() {} };
+  const refresh = () => loadRequirements(currentPage);
+  if (action === 'submit-req') {
+    if (confirm('确定提交需求到 IT 待接收队列？')) api(`/requirements/${id}/submit`, { method: 'POST' }).then(refresh).catch(e => alert(e.message));
+  } else if (action === 'receive-req') openReceiveDialog(id, listContext);
+  else if (action === 'reject-req') openRejectDialog(id, listContext);
+  else if (action === 'document-req') openDocumentDialog(id, listContext);
+  else if (action === 'submit-approval-req') {
+    if (confirm('确定需求文档已完善，提交给上级审批？')) api(`/requirements/${id}/submit-approval`, { method: 'POST' }).then(refresh).catch(e => alert(e.message));
+  } else if (action === 'approve-req') openApprovalDialog(id, listContext);
+  else if (action === 'change-req') openChangeDialog(id, listContext);
+  else if (action === 'plan-req') openPlanDialog(id, listContext);
+  else if (action === 'start-testing-req') openStartTestingDialog(id, listContext);
+  else if (action === 'finish-testing-req') {
+    if (confirm('确定测试验收通过，进入待发布？')) api(`/requirements/${id}/finish-testing`, { method: 'POST' }).then(refresh).catch(e => alert(e.message));
+  } else if (action === 'release-success-req') {
+    if (confirm('确定已发布上线，完成该需求？')) api(`/requirements/${id}/release`, { method: 'POST', body: { success: true } }).then(refresh).catch(e => alert(e.message));
   }
 }
 
@@ -836,17 +891,24 @@ function copyReq(id) {
 
 async function openReqDetail(id) {
   currentDetailId = id;
-  const drawer = openDrawer('需求详情', loadingState());
+  const page = $('#page');
+  page.innerHTML = `<div class="page-container requirement-detail-page">
+    <div class="detail-page-nav"><button class="btn btn-ghost" data-back-requirements>← 返回需求池</button><span>需求详情</span></div>
+    <div class="requirement-detail-body">${loadingState()}</div>
+  </div>`;
+  const drawer = page.querySelector('.requirement-detail-page');
   currentDrawer = drawer;
-  const body = drawer.querySelector('.drawer-body');
+  const body = drawer.querySelector('.requirement-detail-body');
+  drawer.querySelector('[data-back-requirements]').onclick = () => renderRequirements();
 
   try {
-    const [reqRes, approvalRes, changeRes, tasksRes, attachmentsRes] = await Promise.all([
+    const [reqRes, approvalRes, changeRes, tasksRes, attachmentsRes, testsRes] = await Promise.all([
       api(`/requirements/${id}`),
       api(`/requirements/${id}/approval-records`).catch(() => ({ data: [] })),
       api(`/requirements/${id}/change-logs`).catch(() => ({ data: [] })),
       api(`/tasks/by-requirement/${id}`).catch(() => ({ data: [] })),
       api(`/requirements/${id}/attachments`).catch(() => ({ data: [] })),
+      api(`/test-records/by-requirement/${id}`).catch(() => ({ data: [] })),
     ]);
 
     const req = reqRes?.data || reqRes || {};
@@ -854,13 +916,9 @@ async function openReqDetail(id) {
     const changeLogs = changeRes?.data || changeRes || [];
     const tasks = tasksRes?.data || tasksRes || [];
     const attachments = attachmentsRes?.data || attachmentsRes || [];
+    const tests = testsRes?.data || testsRes || [];
 
     // 替换 drawer 标题为需求编号 + 标题
-    const headerTitle = drawer.querySelector('.drawer-title');
-    if (headerTitle) {
-      headerTitle.innerHTML = `<span style="font-size:13px;color:var(--it-color-text-tertiary);font-weight:400">${esc(req.reqNo || req.id)}</span>`;
-    }
-
     body.innerHTML = `
       <!-- 头部信息 -->
       <div style="margin-bottom:20px">
@@ -876,15 +934,12 @@ async function openReqDetail(id) {
         </div>
       </div>
 
-      <!-- 操作按钮区 -->
-      <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap" id="detail-actions">
-        ${renderDetailActionButtons(req)}
-      </div>
-
       <!-- Tabs -->
       <div class="tabs" id="detail-tabs">
-        <div class="tab-item active" data-tab="basic">基本信息</div>
-        <div class="tab-item" data-tab="tasks">任务分解 <span class="tab-count">${tasks.length}</span></div>
+        <div class="tab-item active" data-tab="basic">需求概览</div>
+        <div class="tab-item" data-tab="document">需求文档</div>
+        <div class="tab-item" data-tab="tasks">开发任务 <span class="tab-count">${tasks.length}</span></div>
+        <div class="tab-item" data-tab="testing">测试与缺陷 <span class="tab-count">${tests.length}</span></div>
         <div class="tab-item" data-tab="approval">审批记录</div>
         <div class="tab-item" data-tab="change">变更记录</div>
         <div class="tab-item" data-tab="attachments">附件</div>
@@ -895,8 +950,14 @@ async function openReqDetail(id) {
         <div class="tab-panel active" data-tab-panel="basic">
           ${renderBasicInfo(req)}
         </div>
+        <div class="tab-panel" data-tab-panel="document" style="display:none">
+          ${renderRequirementDocument(req)}
+        </div>
         <div class="tab-panel" data-tab-panel="tasks" style="display:none">
           ${renderTasksTab(tasks, req)}
+        </div>
+        <div class="tab-panel" data-tab-panel="testing" style="display:none">
+          ${renderTestingTab(tests, tasks, req)}
         </div>
         <div class="tab-panel" data-tab-panel="approval" style="display:none">
           ${renderApprovalTab(approvalRecords)}
@@ -925,8 +986,8 @@ async function openReqDetail(id) {
       });
     }
 
-    bindDetailActions(req, drawer);
     bindTaskTabActions(req, drawer);
+    bindTestingTabActions(req, tasks, drawer);
     bindAttachmentActions(req, drawer);
     loadAttachmentPreviews(req.id, drawer);
   } catch (e) {
@@ -1021,6 +1082,17 @@ function renderBasicInfo(req) {
     </div>
     ` : ''}
   `;
+}
+
+function renderRequirementDocument(req) {
+  const sections = [
+    ['需求说明', req.description], ['当前问题', req.currentProblem], ['预期效果', req.expectedEffect],
+    ['验收标准', req.acceptanceCriteria], ['可行性分析', req.feasibility],
+  ];
+  return `<div class="document-sheet">
+    <div class="document-sheet-header"><div><span>${esc(req.reqNo || req.id)}</span><h3>${esc(req.title)}</h3></div><div class="document-meta">评审负责人：${esc(req.reviewOwner || '未指定')} · 预计完成：${formatDate(req.plannedEndDate)}</div></div>
+    ${sections.map(([title, value], index) => `<section><h4>${index + 1}. ${title}</h4><div>${value ? esc(value) : '<span class="document-empty">待完善</span>'}</div></section>`).join('')}
+  </div>`;
 }
 
 // ==================== 详情 - 操作按钮 ====================
@@ -1141,34 +1213,38 @@ function openReceiveDialog(id, drawer) {
         <input type="text" class="form-input" name="reviewOwner" placeholder="请输入评审负责人姓名" required />
       </div>
       <div class="form-item">
-        <label class="form-label">审批模板</label>
-        <select class="form-select" name="templateId">
-          <option value="">默认模板</option>
-          <option value="simple">简易审批</option>
-          <option value="standard">标准审批</option>
-          <option value="strict">严格审批</option>
+        <label class="form-label required">审批流</label>
+        <select class="form-select" name="templateId" required>
+          <option value="">加载审批流...</option>
         </select>
       </div>
       <div class="form-item">
-        <label class="form-label">备注</label>
-        <textarea class="form-textarea" name="remark" rows="2" placeholder="可选填写接收备注..."></textarea>
+        <label class="form-label required">预计完成时间</label>
+        <input type="date" class="form-input" name="plannedEndDate" required />
+        <div class="form-hint">接收时先做初步交付评估，后续排期可进一步细化</div>
       </div>
     </form>
   `;
-  openModal('接收需求', bodyHtml, async (overlay) => {
+  const modal = openModal('接收需求', bodyHtml, async (overlay) => {
     const form = overlay.querySelector('form');
     const reviewOwner = form.reviewOwner.value.trim();
-    if (!reviewOwner) {
-      alert('请填写评审负责人');
+    if (!reviewOwner || !form.templateId.value || !form.plannedEndDate.value) {
+      alert('请填写评审负责人、审批流和预计完成时间');
       return Promise.reject(new Error('必填项未填写'));
     }
     await api(`/requirements/${id}/receive`, {
       method: 'POST',
-      body: { reviewOwner, templateId: form.templateId.value || null, remark: form.remark.value.trim() },
+      body: { reviewOwner, templateId: form.templateId.value, plannedEndDate: form.plannedEndDate.value },
     });
     drawer.remove();
     loadRequirements(currentPage);
   }, '确认接收');
+  modal.querySelector('input[name="plannedEndDate"]').min = new Date().toISOString().slice(0, 10);
+  api('/approval-templates').then(result => {
+    const templates = (result?.data || []).filter(item => item.status === 'ACTIVE');
+    const select = modal.querySelector('select[name="templateId"]');
+    select.innerHTML = `<option value="">请选择</option>${templates.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}`;
+  }).catch(() => { modal.querySelector('select[name="templateId"]').innerHTML = `<option value="">审批流加载失败</option>`; });
 }
 
 function openRejectDialog(id, drawer) {
@@ -1191,6 +1267,77 @@ function openRejectDialog(id, drawer) {
     drawer.remove();
     loadRequirements(currentPage);
   }, '确认驳回');
+}
+
+function openDocumentDialog(id, drawer) {
+  const bodyHtml = `<form>
+    <div class="form-item"><label class="form-label required">当前问题</label><textarea class="form-textarea" name="currentProblem" rows="3" required></textarea></div>
+    <div class="form-item"><label class="form-label required">预期效果</label><textarea class="form-textarea" name="expectedEffect" rows="3" required></textarea></div>
+    <div class="form-item"><label class="form-label required">验收标准</label><textarea class="form-textarea" name="acceptanceCriteria" rows="3" required></textarea></div>
+    <div class="form-item"><label class="form-label">可行性分析</label><textarea class="form-textarea" name="feasibility" rows="3"></textarea></div>
+    <div class="form-item"><label class="form-label required">本次完善说明</label><input class="form-input" name="reason" required placeholder="例：补充业务边界和验收口径" /></div>
+  </form>`;
+  const modal = openModal('完善需求文档', bodyHtml, async overlay => {
+    const form = overlay.querySelector('form');
+    if (!form.currentProblem.value.trim() || !form.expectedEffect.value.trim() || !form.acceptanceCriteria.value.trim() || !form.reason.value.trim()) {
+      alert('请完整填写当前问题、预期效果、验收标准和完善说明'); return Promise.reject(new Error('文档不完整'));
+    }
+    await api(`/requirements/${id}/document`, { method: 'PUT', body: {
+      currentProblem: form.currentProblem.value.trim(), expectedEffect: form.expectedEffect.value.trim(),
+      acceptanceCriteria: form.acceptanceCriteria.value.trim(), feasibility: form.feasibility.value.trim(), reason: form.reason.value.trim(),
+    }});
+    drawer.remove(); loadRequirements(currentPage);
+  }, '保存文档');
+  api(`/requirements/${id}`).then(result => {
+    const data = result?.data || {};
+    const form = modal.querySelector('form');
+    form.currentProblem.value = data.currentProblem || '';
+    form.expectedEffect.value = data.expectedEffect || '';
+    form.acceptanceCriteria.value = data.acceptanceCriteria || '';
+    form.feasibility.value = data.feasibility || '';
+  });
+}
+
+function openChangeDialog(id, drawer) {
+  const bodyHtml = `<form>
+    <div class="change-notice">需求创建后不直接编辑。每次变更都会记录变更前后内容、原因和操作人；已进入审批或研发的需求变更后需重新审批。</div>
+    <div class="form-item"><label class="form-label required">需求标题</label><input class="form-input" name="title" required /></div>
+    <div class="form-grid">
+      <div class="form-item"><label class="form-label">所属系统</label><select class="form-select" name="belongSystem">${SYSTEM_OPTIONS.map(s => `<option value="${s}">${s}</option>`).join('')}</select></div>
+      <div class="form-item"><label class="form-label">需求类型</label><select class="form-select" name="category">${TYPE_OPTIONS.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}</select></div>
+      <div class="form-item"><label class="form-label">紧急程度</label><select class="form-select" name="urgency">${Object.entries(PRIORITY_MAP).map(([v,m]) => `<option value="${v}">${m.label}</option>`).join('')}</select></div>
+      <div class="form-item"><label class="form-label">预计完成</label><input type="date" class="form-input" name="plannedEndDate" /></div>
+    </div>
+    <div class="form-item"><label class="form-label">当前问题</label><textarea class="form-textarea" name="currentProblem" rows="2"></textarea></div>
+    <div class="form-item"><label class="form-label">预期效果</label><textarea class="form-textarea" name="expectedEffect" rows="2"></textarea></div>
+    <div class="form-item"><label class="form-label">验收标准</label><textarea class="form-textarea" name="acceptanceCriteria" rows="2"></textarea></div>
+    <div class="form-item"><label class="form-label required">变更原因</label><textarea class="form-textarea" name="reason" rows="3" required placeholder="说明为什么变更、影响范围以及与谁确认"></textarea></div>
+  </form>`;
+  const modal = openModal('提交需求变更', bodyHtml, async overlay => {
+    const form = overlay.querySelector('form');
+    if (!form.title.value.trim() || !form.reason.value.trim()) { alert('请填写需求标题和变更原因'); return Promise.reject(new Error('必填项未填写')); }
+    await api(`/requirements/${id}/changes`, { method: 'POST', body: {
+      title: form.title.value.trim(), belongSystem: form.belongSystem.value, category: form.category.value,
+      urgency: form.urgency.value, plannedEndDate: form.plannedEndDate.value || null,
+      currentProblem: form.currentProblem.value.trim(), expectedEffect: form.expectedEffect.value.trim(),
+      acceptanceCriteria: form.acceptanceCriteria.value.trim(), reason: form.reason.value.trim(),
+    }});
+    drawer.remove(); loadRequirements(currentPage);
+  }, '提交变更');
+  api(`/requirements/${id}`).then(result => {
+    const data = result?.data || {}; const form = modal.querySelector('form');
+    ['title','belongSystem','category','urgency','plannedEndDate','currentProblem','expectedEffect','acceptanceCriteria'].forEach(key => { if (form[key]) form[key].value = data[key] || ''; });
+  });
+}
+
+function openApprovalDialog(id, drawer) {
+  const bodyHtml = `<form><div class="form-item"><label class="form-label required">审批结果</label><select class="form-select" name="action"><option value="APPROVE">通过</option><option value="REJECT">驳回</option></select></div><div class="form-item"><label class="form-label">审批意见</label><textarea class="form-textarea" name="comment" rows="4" placeholder="请填写审批意见"></textarea></div></form>`;
+  openModal('需求审批', bodyHtml, async overlay => {
+    const form = overlay.querySelector('form');
+    if (form.action.value === 'REJECT' && !form.comment.value.trim()) { alert('驳回时必须填写原因'); return Promise.reject(new Error('请填写驳回原因')); }
+    await api(`/requirements/${id}/approve`, { method: 'POST', body: { action: form.action.value, comment: form.comment.value.trim() } });
+    drawer.remove(); loadRequirements(currentPage);
+  }, '确认审批');
 }
 
 function openPlanDialog(id, drawer) {
@@ -1222,7 +1369,7 @@ function openPlanDialog(id, drawer) {
       </div>
     </form>
   `;
-  openModal('排期分配', bodyHtml, async (overlay) => {
+  const modal = openModal('排期分配', bodyHtml, async (overlay) => {
     const form = overlay.querySelector('form');
     const devOwner = form.devOwner.value.trim();
     if (!devOwner) {
@@ -1242,6 +1389,13 @@ function openPlanDialog(id, drawer) {
     drawer.remove();
     loadRequirements(currentPage);
   }, '确认排期');
+  api(`/requirements/${id}`).then(result => {
+    const data = result?.data || {}; const form = modal.querySelector('form');
+    form.plannedStartDate.value = data.plannedStartDate || new Date().toISOString().slice(0, 10);
+    form.plannedEndDate.value = data.plannedEndDate || '';
+    form.devPlannedEnd.value = data.devPlannedEnd || data.plannedEndDate || '';
+    form.estimatedHours.value = data.estimatedHours || '';
+  });
 }
 
 function openStartTestingDialog(id, drawer) {
@@ -1323,7 +1477,7 @@ function openUpdateProgressDialog(id, drawer) {
 // ==================== 任务列表 Tab ====================
 
 function renderTasksTab(tasks, req) {
-  const canSplit = ['PENDING_PLAN', 'IN_DEVELOPMENT', 'IN_TESTING', 'PENDING_RELEASE'].includes(req.status);
+  const canSplit = ['IN_DEVELOPMENT', 'IN_TESTING', 'PENDING_RELEASE'].includes(req.status);
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div><div style="font-size:13px;font-weight:500;color:var(--it-color-text-primary)">开发任务</div><div style="font-size:12px;color:var(--it-color-text-tertiary);margin-top:3px">任务从已接收的需求中拆分，工时将汇总到任务和需求</div></div>
@@ -1352,6 +1506,33 @@ function renderTasksTab(tasks, req) {
       </table>
     ` : `<div class="empty-state" style="padding:40px 20px"><div class="empty-state-title">暂无开发任务</div><div class="empty-state-desc">${canSplit ? '点击“拆分任务”创建开发任务' : '需求接收并进入排期后可拆分开发任务'}</div></div>`}
   `;
+}
+
+function renderTestingTab(records, tasks, req) {
+  const statusLabels = { OPEN: '待处理', IN_PROGRESS: '处理中', RESOLVED: '待验收', CLOSED: '已关闭', REOPENED: '重新打开' };
+  const severityLabels = { LOW: '低', MEDIUM: '中', HIGH: '高', CRITICAL: '严重' };
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div><div style="font-size:13px;font-weight:600">测试记录与缺陷</div><div style="font-size:12px;color:var(--it-color-text-tertiary);margin-top:3px">每条记录绑定当前需求，可选关联开发任务</div></div><button class="btn btn-primary btn-sm" data-action="add-test-record" data-permission="test:create">+ 记录测试/缺陷</button></div>
+  ${records.length ? `<table class="data-table"><thead><tr><th>类型</th><th>标题</th><th>严重程度</th><th>状态</th><th>测试人</th><th>处理人</th><th>记录时间</th></tr></thead><tbody>${records.map(record => `<tr class="clickable-row" data-action="view-test-record" data-id="${esc(record.id)}"><td><span class="tag">${record.type === 'BUG' ? '缺陷' : '测试'}</span></td><td><strong>${esc(record.title)}</strong></td><td>${severityLabels[record.severity] || esc(record.severity)}</td><td>${statusLabels[record.status] || esc(record.status)}</td><td>${esc(record.tester || '—')}</td><td>${esc(record.handler || '—')}</td><td>${formatDateTime(record.createdAt)}</td></tr>`).join('')}</tbody></table>` : `<div class="empty-state"><div class="empty-state-title">暂无测试或缺陷记录</div><div class="empty-state-desc">点击上方按钮记录测试结果</div></div>`}`;
+}
+
+function bindTestingTabActions(req, tasks, container) {
+  const body = container.querySelector('.requirement-detail-body');
+  body.querySelector('[data-action="add-test-record"]')?.addEventListener('click', () => openAddTestRecordDialog(req, tasks, container));
+  body.querySelectorAll('[data-action="view-test-record"]').forEach(row => row.onclick = async () => {
+    try {
+      const result = await api(`/test-records/${row.dataset.id}`); const record = result?.data || {};
+      openModal('测试/缺陷记录', `<div class="test-record-detail"><h3>${esc(record.title)}</h3><div class="detail-field-grid"><div><small>类型</small><strong>${record.type === 'BUG' ? '缺陷' : '测试'}</strong></div><div><small>状态</small><strong>${esc(record.status)}</strong></div><div><small>测试人</small><strong>${esc(record.tester || '—')}</strong></div><div><small>处理人</small><strong>${esc(record.handler || '—')}</strong></div></div><section><h4>描述</h4><p>${esc(record.description || '—')}</p></section><section><h4>预期结果</h4><p>${esc(record.expectedResult || '—')}</p></section><section><h4>实际结果</h4><p>${esc(record.actualResult || '—')}</p></section></div>`, async () => {}, '关闭');
+    } catch (e) { alert(e.message); }
+  });
+}
+
+function openAddTestRecordDialog(req, tasks, container) {
+  const bodyHtml = `<form><div class="form-grid"><div class="form-item"><label class="form-label required">记录类型</label><select class="form-select" name="type"><option value="TEST">测试记录</option><option value="BUG">缺陷</option></select></div><div class="form-item"><label class="form-label">严重程度</label><select class="form-select" name="severity"><option value="LOW">低</option><option value="MEDIUM">中</option><option value="HIGH">高</option><option value="CRITICAL">严重</option></select></div></div><div class="form-item"><label class="form-label required">标题</label><input class="form-input" name="title" required /></div><div class="form-item"><label class="form-label">关联任务</label><select class="form-select" name="taskId"><option value="">不关联任务</option>${tasks.map(task => `<option value="${esc(task.id)}">${esc(task.taskNo)} - ${esc(task.title)}</option>`).join('')}</select></div><div class="form-grid"><div class="form-item"><label class="form-label">测试人</label><input class="form-input" name="tester" /></div><div class="form-item"><label class="form-label">处理人</label><input class="form-input" name="handler" /></div></div><div class="form-item"><label class="form-label">描述</label><textarea class="form-textarea" name="description" rows="3"></textarea></div><div class="form-item"><label class="form-label">预期结果</label><textarea class="form-textarea" name="expectedResult" rows="2"></textarea></div><div class="form-item"><label class="form-label">实际结果</label><textarea class="form-textarea" name="actualResult" rows="2"></textarea></div></form>`;
+  openModal('记录测试/缺陷', bodyHtml, async overlay => {
+    const form = overlay.querySelector('form'); if (!form.title.value.trim()) { alert('请填写标题'); return Promise.reject(new Error('必填项未填写')); }
+    await api('/test-records', { method: 'POST', body: { requirementId: req.id, taskId: form.taskId.value || null, title: form.title.value.trim(), type: form.type.value, severity: form.severity.value, tester: form.tester.value.trim(), handler: form.handler.value.trim(), description: form.description.value.trim(), expectedResult: form.expectedResult.value.trim(), actualResult: form.actualResult.value.trim() }});
+    container.remove(); openReqDetail(req.id);
+  }, '保存记录');
 }
 
 function bindTaskTabActions(req, drawer) {
@@ -1457,22 +1638,34 @@ function renderChangeTab(logs) {
         <th>字段</th>
         <th>变更前</th>
         <th>变更后</th>
+        <th>变更原因</th>
         <th style="width:70px">操作人</th>
         <th style="width:130px">时间</th>
       </tr></thead>
       <tbody>
         ${logs.map(log => `
           <tr>
-            <td>${esc(log.fieldName || log.field || '—')}</td>
-            <td style="color:var(--it-color-text-tertiary)">${esc(log.oldValue || log.old || '—')}</td>
-            <td style="color:var(--it-color-text-primary)">${esc(log.newValue || log.new || '—')}</td>
-            <td>${esc(log.operator || '—')}</td>
+            <td>${esc(changeFieldLabel(log.fieldName || log.field))}</td>
+            <td style="color:var(--it-color-text-tertiary)">${esc(changeDisplayValue(log.oldValue ?? log.old))}</td>
+            <td style="color:var(--it-color-text-primary)">${esc(changeDisplayValue(log.newValue ?? log.new))}</td>
+            <td>${esc(log.changeReason || '—')}</td>
+            <td>${esc(log.changedBy || log.operator || '—')}</td>
             <td style="color:var(--it-color-text-tertiary)">${formatDateTime(log.createdAt || log.time)}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
   `;
+}
+
+function changeFieldLabel(field) {
+  const labels = { status: '需求状态', approvalNode: '审批节点', title: '需求标题', category: '需求类型', urgency: '紧急程度', belongSystem: '所属系统', sourceDept: '来源部门', currentProblem: '当前问题', expectedEffect: '预期效果', acceptanceCriteria: '验收标准' };
+  return labels[field] || field || '—';
+}
+
+function changeDisplayValue(value) {
+  if (value === null || value === undefined || value === 'null' || value === '') return '—';
+  return STATUS_MAP[value]?.label || TYPE_OPTIONS.find(item => item.value === value)?.label || PRIORITY_MAP[value]?.label || value;
 }
 
 // ==================== 附件 Tab ====================

@@ -78,7 +78,27 @@ public class RequirementController {
     public ApiResponse<Requirement> receive(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         String reviewOwner = (String) body.get("reviewOwner");
         Long templateId = body.get("templateId") != null ? Long.valueOf(body.get("templateId").toString()) : null;
-        return ApiResponse.ok(requirementService.receive(id, reviewOwner, templateId));
+        LocalDate plannedEndDate = body.get("plannedEndDate") != null
+                ? LocalDate.parse(body.get("plannedEndDate").toString()) : null;
+        return ApiResponse.ok(requirementService.receive(id, reviewOwner, templateId, plannedEndDate));
+    }
+
+    @PutMapping("/{id}/document")
+    @PreAuthorize("hasAnyAuthority('requirement:review','requirement:change')")
+    public ApiResponse<Requirement> updateDocument(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        return ApiResponse.ok(requirementService.updateDocument(id, body));
+    }
+
+    @PostMapping("/{id}/submit-approval")
+    @PreAuthorize("hasAuthority('requirement:review')")
+    public ApiResponse<Requirement> submitApproval(@PathVariable Long id) {
+        return ApiResponse.ok(requirementService.submitApproval(id));
+    }
+
+    @PostMapping("/{id}/changes")
+    @PreAuthorize("hasAuthority('requirement:change')")
+    public ApiResponse<Requirement> change(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        return ApiResponse.ok(requirementService.change(id, body));
     }
 
     @PostMapping("/{id}/plan")

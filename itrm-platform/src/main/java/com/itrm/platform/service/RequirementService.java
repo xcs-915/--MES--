@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 @Service
 public class RequirementService {
@@ -151,27 +153,105 @@ public class RequirementService {
 
     @Transactional
     public Requirement update(Long id, Requirement request) {
+        throw new BizException(400, "需求创建后不允许直接编辑，请使用需求变更并填写变更原因");
+    }
+
+    @Transactional
+    public Requirement updateDocument(Long id, Map<String, Object> body) {
         Requirement req = get(id);
-        if (!"DRAFT".equals(req.getStatus())) {
-            throw new BizException(400, "只有草稿状态的需求可以修改");
+        if (!"PENDING_DOCUMENT".equals(req.getStatus())) {
+            throw new BizException(400, "只有待完善文档状态可以编辑需求文档");
         }
-        validateInput(request);
-        req.setTitle(request.getTitle());
-        req.setCategory(request.getCategory());
-        req.setUrgency(request.getUrgency());
-        req.setBelongSystem(request.getBelongSystem());
-        req.setSourceDept(request.getSourceDept());
-        req.setProposer(request.getProposer());
-        req.setDescription(request.getDescription());
-        req.setCurrentProblem(request.getCurrentProblem());
-        req.setExpectedEffect(request.getExpectedEffect());
-        req.setAcceptanceCriteria(request.getAcceptanceCriteria());
-        req.setFeasibility(request.getFeasibility());
-        req.setWorkloadEstimate(request.getWorkloadEstimate());
-        req.setAttachments(request.getAttachments());
-        req.setTags(request.getTags());
-        req.setRemark(request.getRemark());
+        String reason = requiredReason(body, "请填写本次文档完善说明");
+        boolean changed = false;
+        changed |= applyString(req, id, body, "currentProblem", "当前问题", req.getCurrentProblem(), req::setCurrentProblem, reason);
+        changed |= applyString(req, id, body, "expectedEffect", "预期效果", req.getExpectedEffect(), req::setExpectedEffect, reason);
+        changed |= applyString(req, id, body, "acceptanceCriteria", "验收标准", req.getAcceptanceCriteria(), req::setAcceptanceCriteria, reason);
+        changed |= applyString(req, id, body, "feasibility", "可行性分析", req.getFeasibility(), req::setFeasibility, reason);
+        changed |= applyString(req, id, body, "description", "需求说明", req.getDescription(), req::setDescription, reason);
+        if (!changed) {
+            saveChangeLog(id, "需求文档确认", "未确认", "已确认", reason);
+        }
+        ensureDocumentComplete(req);
         return requirementRepository.save(req);
+    }
+
+    @Transactional
+    public Requirement change(Long id, Map<String, Object> body) {
+        Requirement req = get(id);
+        if ("COMPLETED".equals(req.getStatus())) {
+            throw new BizException(400, "已完成需求请先重新打开后再变更");
+        }
+        String reason = requiredReason(body, "需求变更必须填写变更原因");
+        if (body.containsKey("category") && !CATEGORIES.contains(String.valueOf(body.get("category")))) {
+            throw new BizException(400, "需求类型无效");
+        }
+        if (body.containsKey("belongSystem") && !SYSTEMS.contains(String.valueOf(body.get("belongSystem")))) {
+            throw new BizException(400, "所属系统无效");
+        }
+        boolean changed = false;
+        changed |= applyString(req, id, body, "title", "需求标题", req.getTitle(), req::setTitle, reason);
+        changed |= applyString(req, id, body, "category", "需求类型", req.getCategory(), req::setCategory, reason);
+        changed |= applyString(req, id, body, "urgency", "紧急程度", req.getUrgency(), req::setUrgency, reason);
+        changed |= applyString(req, id, body, "belongSystem", "所属系统", req.getBelongSystem(), req::setBelongSystem, reason);
+        changed |= applyString(req, id, body, "sourceDept", "来源部门", req.getSourceDept(), req::setSourceDept, reason);
+        changed |= applyString(req, id, body, "proposer", "提出人", req.getProposer(), req::setProposer, reason);
+        changed |= applyString(req, id, body, "currentProblem", "当前问题", req.getCurrentProblem(), req::setCurrentProblem, reason);
+        changed |= applyString(req, id, body, "expectedEffect", "预期效果", req.getExpectedEffect(), req::setExpectedEffect, reason);
+        changed |= applyString(req, id, body, "acceptanceCriteria", "验收标准", req.getAcceptanceCriteria(), req::setAcceptanceCriteria, reason);
+        changed |= applyString(req, id, body, "remark", "备注", req.getRemark(), req::setRemark, reason);
+        if (body.containsKey("plannedEndDate")) {
+            LocalDate next = body.get("plannedEndDate") == null || body.get("plannedEndDate").toString().isEmpty()
+                    ? null : LocalDate.parse(body.get("plannedEndDate").toString());
+            if (!Objects.equals(req.getPlannedEndDate(), next)) {
+                saveChangeLog(id, "预计完成时间", String.valueOf(req.getPlannedEndDate()), String.valueOf(next), reason);
+                req.setPlannedEndDate(next);
+                changed = true;
+            }
+        }
+        if (!changed) {
+            throw new BizException(400, "没有检测到需求变更");
+        }
+        if (Arrays.asList("REJECTED", "PENDING_APPROVAL", "APPROVED", "IN_DEVELOPMENT", "IN_TESTING", "PENDING_RELEASE").contains(req.getStatus())) {
+            String previousStatus = req.getStatus();
+            if ("PENDING_APPROVAL".equals(previousStatus)) {
+                approvalRecordRepository.findByRequirementIdOrderByCreatedAtDesc(id).stream()
+                        .filter(record -> "PENDING".equals(record.getAction()))
+                        .forEach(record -> {
+                            record.setAction("CANCELLED");
+                            record.setComment("需求发生变更，原审批自动终止");
+                            record.setActedAt(Instant.now());
+                            approvalRecordRepository.save(record);
+                        });
+            }
+            req.setStatus("PENDING_DOCUMENT");
+            req.setApprovalNodeIdx(0);
+            saveChangeLog(id, "需求状态", previousStatus, "PENDING_DOCUMENT", "需求变更后需重新完善文档并审批：" + reason);
+        }
+        return requirementRepository.save(req);
+    }
+
+    private String requiredReason(Map<String, Object> body, String message) {
+        String reason = body.get("reason") == null ? null : body.get("reason").toString().trim();
+        if (!StringUtils.hasText(reason)) throw new BizException(400, message);
+        return reason;
+    }
+
+    private boolean applyString(Requirement req, Long id, Map<String, Object> body, String key,
+                                String label, String oldValue, Consumer<String> setter, String reason) {
+        if (!body.containsKey(key)) return false;
+        String next = body.get(key) == null ? null : body.get(key).toString().trim();
+        if (Objects.equals(oldValue, next)) return false;
+        setter.accept(next);
+        saveChangeLog(id, label, oldValue, next, reason);
+        return true;
+    }
+
+    private void ensureDocumentComplete(Requirement req) {
+        if (!StringUtils.hasText(req.getCurrentProblem()) || !StringUtils.hasText(req.getExpectedEffect())
+                || !StringUtils.hasText(req.getAcceptanceCriteria())) {
+            throw new BizException(400, "需求文档必须包含当前问题、预期效果和验收标准");
+        }
     }
 
     private void validateInput(Requirement request) {
@@ -219,7 +299,7 @@ public class RequirementService {
      * 设置评审负责人、接收时间，选择审批模板，初始化审批记录
      */
     @Transactional
-    public Requirement receive(Long id, String reviewOwner, Long templateId) {
+    public Requirement receive(Long id, String reviewOwner, Long templateId, LocalDate plannedEndDate) {
         Requirement req = get(id);
         if (!"PENDING_RECEIVE".equals(req.getStatus())) {
             throw new BizException(400, "只有待接收状态的需求可以接收");
@@ -230,6 +310,9 @@ public class RequirementService {
         if (templateId == null) {
             throw new BizException(400, "审批模板不能为空");
         }
+        if (plannedEndDate == null) {
+            throw new BizException(400, "预计完成时间不能为空");
+        }
 
         ApprovalTemplate template = approvalTemplateRepository.findById(templateId)
                 .orElseThrow(() -> new BizException(404, "审批模板不存在"));
@@ -238,20 +321,36 @@ public class RequirementService {
         }
 
         String fromStatus = req.getStatus();
-        req.setStatus("PENDING_PLAN");
+        req.setStatus("PENDING_DOCUMENT");
         req.setReviewOwner(reviewOwner);
         req.setReceivedAt(Instant.now());
         req.setApprovalTemplateId(templateId);
         req.setApprovalNodeIdx(0);
+        req.setPlannedEndDate(plannedEndDate);
         requirementRepository.save(req);
+        saveChangeLog(id, "预计完成时间", null, plannedEndDate.toString(), "IT接收需求时评估");
+        saveChangeLog(id, "需求状态", fromStatus, "PENDING_DOCUMENT", "IT接收需求，待完善需求文档");
+        return req;
+    }
 
-        // 初始化审批记录：创建第一个节点的待审批记录
-        List<ApprovalNode> nodes = approvalNodeRepository.findByTemplateIdOrderBySortOrderAsc(templateId);
-        if (!nodes.isEmpty()) {
+    @Transactional
+    public Requirement submitApproval(Long id) {
+        Requirement req = get(id);
+        if (!"PENDING_DOCUMENT".equals(req.getStatus())) {
+            throw new BizException(400, "只有待完善文档状态可以提交审批");
+        }
+        ensureDocumentComplete(req);
+        if (req.getPlannedEndDate() == null) throw new BizException(400, "请先填写预计完成时间");
+        if (req.getApprovalTemplateId() == null) throw new BizException(400, "请先选择审批流");
+        List<ApprovalNode> nodes = approvalNodeRepository.findByTemplateIdOrderBySortOrderAsc(req.getApprovalTemplateId());
+        if (nodes.isEmpty()) throw new BizException(400, "审批模板未配置节点");
+        boolean hasPending = approvalRecordRepository.findByRequirementIdOrderByCreatedAtDesc(id).stream()
+                .anyMatch(record -> "PENDING".equals(record.getAction()));
+        if (!hasPending) {
             ApprovalNode firstNode = nodes.get(0);
             ApprovalRecord record = new ApprovalRecord();
             record.setRequirementId(id);
-            record.setTemplateId(templateId);
+            record.setTemplateId(req.getApprovalTemplateId());
             record.setNodeIdx(0);
             record.setNodeName(firstNode.getNodeName());
             record.setNodeType(firstNode.getNodeType());
@@ -259,8 +358,10 @@ public class RequirementService {
             record.setCreatedAt(Instant.now());
             approvalRecordRepository.save(record);
         }
-
-        saveChangeLog(id, "status", fromStatus, "PENDING_PLAN", "IT接收需求");
+        req.setApprovalNodeIdx(0);
+        req.setStatus("PENDING_APPROVAL");
+        requirementRepository.save(req);
+        saveChangeLog(id, "需求状态", "PENDING_DOCUMENT", "PENDING_APPROVAL", "需求文档完成，提交上级审批");
         return req;
     }
 
@@ -272,8 +373,8 @@ public class RequirementService {
     @Transactional
     public Requirement approveNode(Long id, String action, String comment) {
         Requirement req = get(id);
-        if (!"PENDING_PLAN".equals(req.getStatus())) {
-            throw new BizException(400, "只有待排期状态的需求可以审批");
+        if (!"PENDING_APPROVAL".equals(req.getStatus())) {
+            throw new BizException(400, "只有待审批状态的需求可以审批");
         }
         if (req.getApprovalTemplateId() == null) {
             throw new BizException(400, "未设置审批模板");
@@ -313,12 +414,11 @@ public class RequirementService {
 
             int nextIdx = currentIdx + 1;
             if (nextIdx >= nodes.size()) {
-                // 最后一个审批节点，进入开发阶段
-                req.setStatus("IN_DEVELOPMENT");
+                // 最后一个审批节点，进入待排期阶段
+                req.setStatus("APPROVED");
                 req.setApprovalNodeIdx(nextIdx);
-                req.setActualStartDate(LocalDate.now());
                 requirementRepository.save(req);
-                saveChangeLog(id, "status", fromStatus, "IN_DEVELOPMENT", "审批通过，进入开发阶段");
+                saveChangeLog(id, "需求状态", fromStatus, "APPROVED", "审批通过，待排期分配");
             } else {
                 // 进入下一节点
                 req.setApprovalNodeIdx(nextIdx);
@@ -375,8 +475,8 @@ public class RequirementService {
     public Requirement plan(Long id, String devOwner, LocalDate plannedStart, LocalDate plannedEnd,
                             LocalDate devPlannedEnd, BigDecimal estimatedHours) {
         Requirement req = get(id);
-        if (!"PENDING_PLAN".equals(req.getStatus())) {
-            throw new BizException(400, "只有待排期状态的需求可以排期");
+        if (!"APPROVED".equals(req.getStatus())) {
+            throw new BizException(400, "只有审批通过的需求可以排期");
         }
         if (!StringUtils.hasText(devOwner)) {
             throw new BizException(400, "开发负责人不能为空");
@@ -385,7 +485,7 @@ public class RequirementService {
         req.setStatus("IN_DEVELOPMENT");
         req.setDevOwner(devOwner);
         req.setPlannedStartDate(plannedStart);
-        req.setPlannedEndDate(plannedEnd);
+        req.setPlannedEndDate(plannedEnd != null ? plannedEnd : req.getPlannedEndDate());
         req.setDevPlannedEnd(devPlannedEnd);
         req.setEstimatedHours(estimatedHours != null ? estimatedHours : BigDecimal.ZERO);
         req.setActualStartDate(LocalDate.now());
@@ -533,8 +633,8 @@ public class RequirementService {
     @Transactional(readOnly = true)
     public Map<String, Object> stats() {
         Map<String, Object> result = new HashMap<>();
-        String[] statuses = {"DRAFT", "PENDING_RECEIVE", "PENDING_PLAN", "IN_DEVELOPMENT",
-                "IN_TESTING", "PENDING_RELEASE", "COMPLETED", "REJECTED"};
+        String[] statuses = {"DRAFT", "PENDING_RECEIVE", "PENDING_DOCUMENT", "PENDING_APPROVAL", "APPROVED",
+                "IN_DEVELOPMENT", "IN_TESTING", "PENDING_RELEASE", "COMPLETED", "REJECTED"};
         Map<String, Long> statusCounts = new HashMap<>();
         for (String status : statuses) {
             statusCounts.put(status, (long) requirementRepository.findByStatus(status).size());

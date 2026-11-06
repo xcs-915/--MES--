@@ -2,8 +2,8 @@ import { $, esc } from '../utils/dom.js';
 import { api } from '../api/request.js';
 import { emptyState } from './_ui.js';
 
-const statusNames={DRAFT:'草稿',PENDING_RECEIVE:'待接收',PENDING_PLAN:'待排期',IN_DEVELOPMENT:'开发中',IN_TESTING:'测试中',PENDING_RELEASE:'待发布',COMPLETED:'已完成',REJECTED:'已驳回'};
-const colors={DRAFT:'#94a3b8',PENDING_RECEIVE:'#f59e0b',PENDING_PLAN:'#8b5cf6',IN_DEVELOPMENT:'#2563eb',IN_TESTING:'#06b6d4',PENDING_RELEASE:'#ec4899',COMPLETED:'#10b981',REJECTED:'#ef4444'};
+const statusNames={DRAFT:'草稿',PENDING_RECEIVE:'待接收',PENDING_DOCUMENT:'待完善文档',PENDING_APPROVAL:'待审批',APPROVED:'已审批待排期',IN_DEVELOPMENT:'开发中',IN_TESTING:'测试中',PENDING_RELEASE:'待发布',COMPLETED:'已完成',REJECTED:'已驳回'};
+const colors={DRAFT:'#94a3b8',PENDING_RECEIVE:'#f59e0b',PENDING_DOCUMENT:'#8b5cf6',PENDING_APPROVAL:'#a855f7',APPROVED:'#6366f1',IN_DEVELOPMENT:'#2563eb',IN_TESTING:'#06b6d4',PENDING_RELEASE:'#ec4899',COMPLETED:'#10b981',REJECTED:'#ef4444'};
 
 export async function renderReports(){
   $('#page').innerHTML=`<div class="page-container"><div class="page-header"><div><div class="page-title">统计分析</div><div class="page-subtitle">从交付效率、质量和资源投入三个维度观察研发运行</div></div><div class="page-actions"><select class="form-select"><option>本季度</option><option>本月</option><option>本年度</option></select><button class="btn btn-secondary" id="report-export">导出报告</button></div></div><div id="report-kpis" class="report-kpis"></div><div class="report-grid"><section class="card"><div class="card-header"><div><div class="card-title">需求状态分布</div><div class="card-caption">当前需求池结构</div></div></div><div id="status-chart" class="report-chart"></div></section><section class="card"><div class="card-header"><div><div class="card-title">部门需求排行</div><div class="card-caption">需求来源与完成情况</div></div></div><div id="dept-chart" class="report-chart"></div></section><section class="card report-wide"><div class="card-header"><div><div class="card-title">交付健康度</div><div class="card-caption">按负责人汇总在制需求、预计工时与逾期风险</div></div></div><div id="delivery-table" class="table-wrapper"></div></section></div></div>`;

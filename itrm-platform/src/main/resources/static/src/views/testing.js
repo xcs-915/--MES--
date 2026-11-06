@@ -69,7 +69,7 @@ export async function renderTesting() {
 async function loadRequirementsForSelect() {
   try {
     const res = await api('/requirements?size=20');
-    allRequirements = res?.data?.content || res?.data || [];
+    allRequirements = res?.data?.items || res?.data?.content || [];
   } catch (e) {
     allRequirements = [];
   }
@@ -128,7 +128,7 @@ async function loadRecords() {
   if (!allRequirements.length) {
     try {
       const res = await api('/requirements?size=20');
-      allRequirements = res?.data?.content || res?.data || [];
+      allRequirements = res?.data?.items || res?.data?.content || [];
     } catch (e) {
       table.innerHTML = emptyState('请从需求详情添加测试记录');
       return;

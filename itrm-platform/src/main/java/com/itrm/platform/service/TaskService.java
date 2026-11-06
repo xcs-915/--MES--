@@ -23,7 +23,7 @@ public class TaskService {
     private final RequirementRepository requirementRepository;
     private final TimeLogRepository timeLogRepository;
     private static final Set<String> TASK_READY_STATUSES = new HashSet<>(Arrays.asList(
-            "PENDING_PLAN", "IN_DEVELOPMENT", "IN_TESTING", "PENDING_RELEASE"
+            "IN_DEVELOPMENT", "IN_TESTING", "PENDING_RELEASE"
     ));
 
     public TaskService(TaskRepository taskRepository, RequirementRepository requirementRepository,

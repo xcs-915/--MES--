@@ -2,6 +2,9 @@ package com.itrm.platform.service;
 
 import com.itrm.platform.common.BizException;
 import com.itrm.platform.domain.TestRecord;
+import com.itrm.platform.domain.Task;
+import com.itrm.platform.repo.RequirementRepository;
+import com.itrm.platform.repo.TaskRepository;
 import com.itrm.platform.repo.TestRecordRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -14,9 +17,15 @@ import java.util.List;
 public class TestRecordService {
 
     private final TestRecordRepository testRecordRepository;
+    private final RequirementRepository requirementRepository;
+    private final TaskRepository taskRepository;
 
-    public TestRecordService(TestRecordRepository testRecordRepository) {
+    public TestRecordService(TestRecordRepository testRecordRepository,
+                             RequirementRepository requirementRepository,
+                             TaskRepository taskRepository) {
         this.testRecordRepository = testRecordRepository;
+        this.requirementRepository = requirementRepository;
+        this.taskRepository = taskRepository;
     }
 
     private String getCurrentUser() {
@@ -36,6 +45,18 @@ public class TestRecordService {
 
     @Transactional
     public TestRecord create(Long requirementId, Long taskId, TestRecord record) {
+        requirementRepository.findById(requirementId)
+                .orElseThrow(() -> new BizException(404, "需求不存在"));
+        if (taskId != null) {
+            Task task = taskRepository.findById(taskId)
+                    .orElseThrow(() -> new BizException(404, "开发任务不存在"));
+            if (!requirementId.equals(task.getRequirementId())) {
+                throw new BizException(400, "测试记录与开发任务不属于同一需求");
+            }
+        }
+        if (record.getTitle() == null || record.getTitle().trim().isEmpty()) {
+            throw new BizException(400, "测试/缺陷标题不能为空");
+        }
         TestRecord newRecord = new TestRecord();
         newRecord.setRequirementId(requirementId);
         newRecord.setTaskId(taskId);

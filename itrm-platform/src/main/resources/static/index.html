@@ -63,7 +63,6 @@
         <div class="nav-group"><div class="nav-group-title">计划与执行</div>
           <a class="nav-link" data-view="tasks" data-permission="task:view"><span class="nav-icon">☷</span><span class="nav-text">开发任务</span></a>
           <a class="nav-link" data-view="schedule" data-permission="schedule:view"><span class="nav-icon">⌁</span><span class="nav-text">排期与负载</span></a>
-          <a class="nav-link" data-view="testing" data-permission="test:view"><span class="nav-icon">⌾</span><span class="nav-text">测试与缺陷</span></a>
         </div>
         <div class="nav-group"><div class="nav-group-title">度量</div>
           <a class="nav-link" data-view="timelog" data-permission="timelog:view"><span class="nav-icon">◷</span><span class="nav-text">工时管理</span></a>
@@ -92,7 +91,7 @@
           <div class="breadcrumb"><span class="breadcrumb-item">TRM</span><span class="breadcrumb-separator">/</span><strong id="breadcrumb-current">工作台</strong></div>
         </div>
         <div class="topbar-right">
-          <button class="topbar-search" id="global-search-btn"><span>⌕</span><span>搜索需求、任务、人员</span><kbd>Ctrl K</kbd></button>
+          <button class="topbar-icon-btn compact-search" id="global-search-btn" title="全局搜索 (Ctrl+K)" aria-label="全局搜索">⌕</button>
           <button class="topbar-btn quick-create" id="quick-create-btn" data-permission="requirement:create">＋ 新建需求</button>
           <button class="topbar-icon-btn" id="notification-btn" title="通知">♢<span class="notification-dot"></span></button>
           <span class="topbar-divider"></span>
@@ -104,6 +103,6 @@
     <div id="sidebar-mask" class="sidebar-mask"></div>
   </div>
 
-  <script type="module" src="/itrm/src/main.js?v=4"></script>
+  <script type="module" src="/itrm/src/main.js?v=5"></script>
 </body>
 </html>
