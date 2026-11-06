@@ -44,8 +44,12 @@ public class RequirementAttachmentService {
     @Transactional(readOnly = true)
     public RequirementAttachment get(Long requirementId, Long attachmentId) {
         ensureRequirement(requirementId);
-        return attachmentRepository.findByIdAndRequirementId(attachmentId, requirementId)
+        RequirementAttachment attachment = attachmentRepository.findByIdAndRequirementId(attachmentId, requirementId)
                 .orElseThrow(() -> new BizException(404, "附件不存在"));
+        if (attachment.getFileData() == null) {
+            throw new BizException(404, "该历史附件缺少文件内容，请重新上传");
+        }
+        return attachment;
     }
 
     @Transactional
