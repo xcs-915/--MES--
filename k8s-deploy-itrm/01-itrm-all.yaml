@@ -62,7 +62,7 @@ spec:
     spec:
       containers:
         - name: itrm-platform
-          image: itrm-platform:v12
+          image: itrm-platform:v13
           imagePullPolicy: Never
           ports:
             - name: http

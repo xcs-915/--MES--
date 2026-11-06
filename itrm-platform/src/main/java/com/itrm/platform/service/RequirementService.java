@@ -45,19 +45,22 @@ public class RequirementService {
     private final ApprovalNodeRepository approvalNodeRepository;
     private final ApprovalRecordRepository approvalRecordRepository;
     private final ChangeLogRepository changeLogRepository;
+    private final TestRecordRepository testRecordRepository;
 
     public RequirementService(RequirementRepository requirementRepository,
                               TaskRepository taskRepository,
                               ApprovalTemplateRepository approvalTemplateRepository,
                               ApprovalNodeRepository approvalNodeRepository,
                               ApprovalRecordRepository approvalRecordRepository,
-                              ChangeLogRepository changeLogRepository) {
+                              ChangeLogRepository changeLogRepository,
+                              TestRecordRepository testRecordRepository) {
         this.requirementRepository = requirementRepository;
         this.taskRepository = taskRepository;
         this.approvalTemplateRepository = approvalTemplateRepository;
         this.approvalNodeRepository = approvalNodeRepository;
         this.approvalRecordRepository = approvalRecordRepository;
         this.changeLogRepository = changeLogRepository;
+        this.testRecordRepository = testRecordRepository;
     }
 
     private String getCurrentUser() {
@@ -506,6 +509,13 @@ public class RequirementService {
         if (!StringUtils.hasText(tester)) {
             throw new BizException(400, "测试人员不能为空");
         }
+        List<Task> tasks = taskRepository.findByRequirementIdOrderBySortOrderAsc(id);
+        if (tasks.isEmpty()) {
+            throw new BizException(400, "请先从需求拆分开发任务");
+        }
+        if (tasks.stream().anyMatch(task -> !"DONE".equals(task.getStatus()))) {
+            throw new BizException(400, "所有开发任务完成后才能转测试");
+        }
         String fromStatus = req.getStatus();
         req.setStatus("IN_TESTING");
         req.setTester(tester);
@@ -523,6 +533,13 @@ public class RequirementService {
         Requirement req = get(id);
         if (!"IN_TESTING".equals(req.getStatus())) {
             throw new BizException(400, "只有测试中的需求可以完成测试");
+        }
+        List<TestRecord> records = testRecordRepository.findByRequirementIdOrderByCreatedAtDesc(id);
+        if (records.isEmpty()) {
+            throw new BizException(400, "至少需要一条测试或验收记录");
+        }
+        if (records.stream().anyMatch(record -> !"CLOSED".equals(record.getStatus()))) {
+            throw new BizException(400, "存在未关闭的测试或缺陷记录，不能完成测试");
         }
         String fromStatus = req.getStatus();
         req.setStatus("PENDING_RELEASE");
