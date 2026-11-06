@@ -48,12 +48,12 @@ BEGIN
     EXEC(N'UPDATE dbo.itrm_attachment
            SET requirement_id = ref_id
            WHERE requirement_id IS NULL AND (ref_type = N''REQUIREMENT'' OR ref_type IS NULL)');
-    ALTER TABLE dbo.itrm_attachment ALTER COLUMN ref_id BIGINT NULL;
+    EXEC(N'ALTER TABLE dbo.itrm_attachment ALTER COLUMN ref_id BIGINT NULL');
 END;
 
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.itrm_attachment') AND name = 'ref_type')
 BEGIN
-    ALTER TABLE dbo.itrm_attachment ALTER COLUMN ref_type NVARCHAR(20) NULL;
+    EXEC(N'ALTER TABLE dbo.itrm_attachment ALTER COLUMN ref_type NVARCHAR(20) NULL');
 END;
 
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.itrm_attachment') AND name = 'mime_type')
@@ -66,18 +66,18 @@ BEGIN
     EXEC(N'UPDATE dbo.itrm_attachment SET uploaded_at = created_at WHERE created_at IS NOT NULL');
 END;
 
-UPDATE dbo.itrm_attachment
-SET is_image = CASE WHEN content_type LIKE N'image/%' THEN 1 ELSE 0 END;
+EXEC(N'UPDATE dbo.itrm_attachment
+       SET is_image = CASE WHEN content_type LIKE N''image/%'' THEN 1 ELSE 0 END');
 
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'fk_itrm_attachment_req')
 BEGIN
-    ALTER TABLE dbo.itrm_attachment ADD CONSTRAINT fk_itrm_attachment_req
-        FOREIGN KEY (requirement_id) REFERENCES dbo.itrm_requirement(id) ON DELETE CASCADE;
+    EXEC(N'ALTER TABLE dbo.itrm_attachment ADD CONSTRAINT fk_itrm_attachment_req
+           FOREIGN KEY (requirement_id) REFERENCES dbo.itrm_requirement(id) ON DELETE CASCADE');
 END;
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_itrm_attachment_req' AND object_id = OBJECT_ID('dbo.itrm_attachment'))
 BEGIN
-    CREATE NONCLUSTERED INDEX ix_itrm_attachment_req
-        ON dbo.itrm_attachment(requirement_id, uploaded_at DESC);
+    EXEC(N'CREATE NONCLUSTERED INDEX ix_itrm_attachment_req
+           ON dbo.itrm_attachment(requirement_id, uploaded_at DESC)');
 END;
 
