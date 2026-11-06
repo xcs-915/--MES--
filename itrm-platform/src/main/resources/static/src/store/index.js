@@ -4,6 +4,7 @@ const initialState = {
   view: 'dashboard',
   user: null,
   token: null,
+  currentReqId: null,
   requirements: { items: [], total: 0, page: 0, size: 20 },
   tasks: { items: [], total: 0, page: 0, size: 20 },
 };
@@ -39,4 +40,35 @@ export function getUser() {
     if (u) { state.user = JSON.parse(u); return state.user; }
   } catch {}
   return null;
+}
+
+/** 设置当前需求 ID */
+export function setCurrentReqId(id) {
+  state.currentReqId = id;
+  if (id !== null && id !== undefined) {
+    sessionStorage.setItem('itrm_current_req_id', String(id));
+  } else {
+    sessionStorage.removeItem('itrm_current_req_id');
+  }
+}
+
+/** 获取当前需求 ID */
+export function getCurrentReqId() {
+  if (state.currentReqId !== null && state.currentReqId !== undefined) {
+    return state.currentReqId;
+  }
+  const cached = sessionStorage.getItem('itrm_current_req_id');
+  if (cached !== null) {
+    state.currentReqId = isNaN(Number(cached)) ? cached : Number(cached);
+    return state.currentReqId;
+  }
+  return null;
+}
+
+/** 清空状态（登出时使用） */
+export function resetState() {
+  Object.assign(state, JSON.parse(JSON.stringify(initialState)));
+  localStorage.removeItem('itrm_token');
+  localStorage.removeItem('itrm_user');
+  sessionStorage.removeItem('itrm_current_req_id');
 }

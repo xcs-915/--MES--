@@ -3,123 +3,256 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>IT需求管理平台</title>
-  <link rel="stylesheet" href="/itrm/app.css?v=1">
+  <title>ITRM - IT需求管理平台</title>
+  <link rel="stylesheet" href="/itrm/app.css?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- ========== 登录页 ========== -->
   <div id="login-view" class="login-wrap">
-    <div class="login-card">
-      <div class="login-logo">
-        <div class="logo-icon">IT</div>
-        <div class="logo-text">
-          <h1>ITRM Platform</h1>
-          <p>IT 需求管理与开发进度跟踪平台</p>
+    <div class="login-bg">
+      <div class="bg-shape shape-1"></div>
+      <div class="bg-shape shape-2"></div>
+      <div class="bg-shape shape-3"></div>
+    </div>
+    <div class="login-container">
+      <div class="login-hero">
+        <div class="hero-brand">
+          <div class="hero-logo">
+            <svg viewBox="0 0 32 32" fill="none">
+              <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#logoGrad)"/>
+              <path d="M10 16l4 4 8-8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <defs><linearGradient id="logoGrad" x1="2" y1="2" x2="30" y2="30"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs>
+            </svg>
+          </div>
+          <div class="hero-title">
+            <h1>ITRM Platform</h1>
+            <p>IT 需求管理与开发进度跟踪平台</p>
+          </div>
+        </div>
+        <div class="hero-features">
+          <div class="feature-item">
+            <div class="feature-icon">📋</div>
+            <div><strong>需求全生命周期</strong><span>提交 → 评审 → 排期 → 开发 → 测试 → 发布</span></div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">📊</div>
+            <div><strong>可视化进度跟踪</strong><span>看板、甘特图、工时统计一目了然</span></div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">⚡</div>
+            <div><strong>高效协作流程</strong><span>多角色协同、审批流、变更留痕</span></div>
+          </div>
         </div>
       </div>
-      <div class="login-form">
-        <label><span>用户名</span><input id="login-username" type="text" placeholder="admin" value="admin"></label>
-        <label><span>密码</span><input id="login-password" type="password" placeholder="admin123" value="admin123"></label>
-        <button id="login-btn" class="btn-primary">登 录</button>
-        <p class="login-tip">默认账号：admin / admin123</p>
+      <div class="login-card">
+        <div class="login-card-header">
+          <h2>欢迎登录</h2>
+          <p>请输入您的账号信息</p>
+        </div>
+        <div class="login-form">
+          <div class="form-group">
+            <label class="form-label">用户名</label>
+            <div class="input-wrap">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <input id="login-username" type="text" class="form-input" placeholder="请输入用户名" value="admin">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">密码</label>
+            <div class="input-wrap">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <input id="login-password" type="password" class="form-input" placeholder="请输入密码" value="admin123">
+            </div>
+          </div>
+          <button id="login-btn" class="btn btn-primary btn-block btn-lg">
+            <span>登 录</span>
+          </button>
+          <p class="login-tip">默认测试账号：admin / admin123</p>
+        </div>
       </div>
     </div>
   </div>
 
-  <div id="app-view" class="app-wrap hidden">
+  <!-- ========== 主应用 ========== -->
+  <div id="app-view" class="app-layout hidden">
+    <!-- 左侧导航 -->
     <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="logo-icon small">IT</div>
-        <div>
-          <div class="brand">ITRM</div>
-          <div class="brand-sub">需求管理平台</div>
+      <div class="sidebar-brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 28 28" fill="none">
+            <rect x="2" y="2" width="24" height="24" rx="6" fill="url(#sidebarLogoGrad)"/>
+            <path d="M8.5 14l3 3 6-6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs><linearGradient id="sidebarLogoGrad" x1="2" y1="2" x2="26" y2="26"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-name">ITRM</div>
+          <div class="brand-desc">需求管理平台</div>
         </div>
       </div>
-      <nav class="nav-menu">
-        <a class="nav-link active" data-view="dashboard">
-          <svg class="icon"><use href="#icon-dashboard"></use></svg><span>工作台</span>
-        </a>
-        <a class="nav-link" data-view="requirements">
-          <svg class="icon"><use href="#icon-clipboard"></use></svg><span>需求池</span>
-        </a>
-        <a class="nav-link" data-view="tasks">
-          <svg class="icon"><use href="#icon-list"></use></svg><span>任务管理</span>
-        </a>
-        <a class="nav-link" data-view="board">
-          <svg class="icon"><use href="#icon-board"></use></svg><span>项目看板</span>
-        </a>
-        <a class="nav-link" data-view="testing">
-          <svg class="icon"><use href="#icon-check"></use></svg><span>测试验收</span>
-        </a>
-        <a class="nav-link" data-view="timelog">
-          <svg class="icon"><use href="#icon-clock"></use></svg><span>工时管理</span>
-        </a>
-      </nav>
-      <div class="sidebar-footer">
-        <div class="user-info">
-          <div class="avatar" id="user-avatar">A</div>
-          <div>
-            <div class="user-name" id="user-name">admin</div>
-            <div class="user-role" id="user-role">管理员</div>
-          </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">工作台</div>
+          <a class="nav-item active" data-view="dashboard">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>
+              <rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>
+            </svg>
+            <span class="nav-label">工作台</span>
+          </a>
         </div>
-        <button class="logout-btn" id="logout-btn">退出</button>
+
+        <div class="nav-section">
+          <div class="nav-section-title">需求管理</div>
+          <a class="nav-item" data-view="requirements">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/>
+              <line x1="9" y1="17" x2="15" y2="17"/><line x1="9" y1="9" x2="11" y2="9"/>
+            </svg>
+            <span class="nav-label">需求池</span>
+            <span class="nav-badge">0</span>
+          </a>
+          <a class="nav-item" data-view="board">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
+            </svg>
+            <span class="nav-label">需求看板</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">研发管理</div>
+          <a class="nav-item" data-view="tasks">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <div class="not-svg"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></div>
+              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+              <circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>
+            </svg>
+            <span class="nav-label">开发任务</span>
+          </a>
+          <a class="nav-item" data-view="testing">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <span class="nav-label">测试验收</span>
+          </a>
+          <a class="nav-item" data-view="timelog">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span class="nav-label">工时管理</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">系统设置</div>
+          <a class="nav-item" data-view="templates">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+            <span class="nav-label">审批模板</span>
+          </a>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div class="user-avatar" id="user-avatar">A</div>
+          <div class="user-meta">
+            <div class="user-name" id="user-name">admin</div>
+            <div class="user-role" id="user-role">系统管理员</div>
+          </div>
+          <button class="logout-btn" id="logout-btn" title="退出登录">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </aside>
-    <main class="main-content">
+
+    <!-- 主内容区 -->
+    <div class="main-area">
+      <!-- 顶部栏 -->
       <header class="topbar">
-        <div class="breadcrumb" id="breadcrumb">工作台</div>
-        <div class="topbar-actions">
+        <div class="topbar-left">
+          <div class="breadcrumb" id="breadcrumb">
+            <span class="breadcrumb-root">工作台</span>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-current" id="breadcrumb-current">总览</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <div class="search-box">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" class="search-input" placeholder="搜索需求、任务、人员...">
+            <kbd class="search-hotkey">⌘K</kbd>
+          </div>
+          <button class="icon-btn" title="通知">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span class="icon-dot"></span>
+          </button>
+          <button class="icon-btn" title="帮助">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </button>
         </div>
       </header>
-      <div id="page" class="page-container"></div>
-    </main>
+
+      <!-- 页面内容 -->
+      <div id="page" class="page-content"></div>
+    </div>
   </div>
 
-  <!-- SVG Icons -->
-  <svg style="display:none">
-    <symbol id="icon-dashboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/>
-      <rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>
-    </symbol>
-    <symbol id="icon-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-      <rect x="8" y="2" width="8" height="4" rx="1"/>
-    </symbol>
-    <symbol id="icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-      <circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>
-    </symbol>
-    <symbol id="icon-board" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="3" y="3" width="18" height="18" rx="2"/>
-      <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
-    </symbol>
-    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-    </symbol>
-    <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-    </symbol>
-    <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </symbol>
-    <symbol id="icon-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-    </symbol>
-    <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-    </symbol>
-    <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-    </symbol>
-    <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </symbol>
-    <symbol id="icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-    </symbol>
-  </svg>
+  <!-- ========== 全局抽屉容器 ========== -->
+  <div id="drawer" class="drawer hidden">
+    <div class="drawer-mask"></div>
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <div class="drawer-title" id="drawer-title">详情</div>
+        <button class="drawer-close" id="drawer-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drawer-body" id="drawer-body"></div>
+    </div>
+  </div>
 
-  <script type="module" src="/itrm/src/main.js?v=1"></script>
+  <!-- ========== 全局弹窗 ========== -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-mask"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">提示</div>
+        <button class="modal-close" id="modal-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- ========== Toast ========== -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script type="module" src="/itrm/src/main.js?v=2"></script>
 </body>
 </html>
