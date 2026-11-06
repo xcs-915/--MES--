@@ -1,222 +1,204 @@
-/**
- * ITRM Platform - Main entry
- * 登录校验、路由、导航、初始渲染
- */
-
-import { $, $$ } from './utils/dom.js';
-import { state, setToken, setUser, getUser, getToken } from './store/index.js';
+import { $, $$, esc } from './utils/dom.js';
+import { state, setToken, setUser, getUser, getToken, hasPermission, resetState } from './store/index.js';
 import { api } from './api/request.js';
 import * as UI from './views/_ui.js';
-
-// 将 UI 组件暴露到全局
-window.UI = UI;
-
 import { renderDashboard } from './views/dashboard.js';
 import { renderRequirements } from './views/requirements.js';
 import { renderTasks } from './views/tasks.js';
 import { renderBoard } from './views/board.js';
 import { renderTesting } from './views/testing.js';
 import { renderTimelog } from './views/timelog.js';
+import { renderSchedule } from './views/schedule.js';
+import { renderReports } from './views/reports.js';
+import { renderWorkflows } from './views/workflows.js';
+import { renderUsers } from './views/users.js';
+import { renderRoles } from './views/roles.js';
 
-// ---------- 视图标题映射（面包屑用） ----------
+window.UI = UI;
 
-const viewTitles = {
-  dashboard: '工作台',
-  requirements: '需求池',
-  tasks: '任务管理',
-  board: '项目看板',
-  testing: '测试验收',
-  timelog: '工时管理',
-  templates: '审批模板',
+const views = {
+  dashboard: { title: '工作台', permission: 'dashboard:view', render: renderDashboard },
+  requirements: { title: '需求池', permission: 'requirement:view', render: renderRequirements },
+  board: { title: '研发看板', permission: 'board:view', render: renderBoard },
+  tasks: { title: '开发任务', permission: 'task:view', render: renderTasks },
+  schedule: { title: '排期与负载', permission: 'schedule:view', render: renderSchedule },
+  testing: { title: '测试与缺陷', permission: 'test:view', render: renderTesting },
+  timelog: { title: '工时管理', permission: 'timelog:view', render: renderTimelog },
+  reports: { title: '统计分析', permission: 'report:view', render: renderReports },
+  workflows: { title: '审批流', permission: 'workflow:view', render: renderWorkflows },
+  users: { title: '用户管理', permission: 'user:view', render: renderUsers },
+  roles: { title: '角色权限', permission: 'role:view', render: renderRoles },
 };
 
-// ---------- 视图渲染器映射 ----------
-
-const viewRenderers = {
-  dashboard: renderDashboard,
-  requirements: renderRequirements,
-  tasks: renderTasks,
-  board: renderBoard,
-  testing: renderTesting,
-  timelog: renderTimelog,
-  templates: renderTemplates,
+const roleLabels = {
+  ADMIN: '系统管理员', BUSINESS_USER: '业务需求人', IT_REVIEWER: '需求评审人',
+  IT_PLANNER: '项目经理', DEVELOPER: '开发人员', TESTER: '测试人员', RELEASE_ENGINEER: '发布工程师',
 };
 
-// ---------- 角色映射 ----------
-
-function roleLabel(role) {
-  const map = {
-    ADMIN: '系统管理员',
-    BUSINESS_USER: '业务用户',
-    IT_REVIEWER: '需求评审',
-    IT_PLANNER: '项目排期',
-    DEVELOPER: '开发人员',
-    TESTER: '测试人员',
-    RELEASE_ENGINEER: '发布工程师',
-  };
-  return map[role] || role;
-}
-
-// ---------- 登录/登出 ----------
+function roleLabel(role) { return roleLabels[role] || role || '普通用户'; }
 
 function showLogin() {
-  $('#login-view').classList.remove('hidden');
-  $('#app-view').classList.add('hidden');
+  $('#login-view')?.classList.remove('hidden');
+  $('#app-view')?.classList.add('hidden');
+  const remembered = localStorage.getItem('itrm_remembered_user');
+  if (remembered && $('#login-username')) $('#login-username').value = remembered;
 }
 
-function showApp() {
-  $('#login-view').classList.add('hidden');
-  $('#app-view').classList.remove('hidden');
-  const user = getUser();
-  if (user) {
-    $('#user-name').textContent = user.realName || user.username;
-    $('#user-role').textContent = roleLabel(user.role);
-    $('#user-avatar').textContent = (user.realName || user.username).charAt(0).toUpperCase();
-  }
-  renderView('dashboard');
+async function showApp() {
+  $('#login-view')?.classList.add('hidden');
+  $('#app-view')?.classList.remove('hidden');
+  try {
+    const me = await api('/auth/me', { silent: true });
+    if (me?.data) setUser(me.data);
+  } catch { /* cached identity remains usable until the API reports 401 */ }
+  applyIdentity();
+  applyPermissions();
+  const first = $$('.nav-link:not(.hidden)')[0]?.dataset.view || 'dashboard';
+  await renderView(first);
+  updatePendingBadge();
+}
+
+function applyIdentity() {
+  const user = getUser() || {};
+  const name = user.realName || user.username || '用户';
+  const avatar = name.slice(0, 1).toUpperCase();
+  $('#user-name').textContent = name;
+  $('#user-role').textContent = roleLabel(user.role);
+  $('#user-avatar').textContent = avatar;
+  $('#topbar-avatar').textContent = avatar;
+  $('#topbar-user-name').textContent = name;
+}
+
+function applyPermissions(root = document) {
+  root.querySelectorAll('[data-permission]').forEach(el => {
+    const allowed = el.dataset.permission.split(',').some(hasPermission);
+    el.classList.toggle('hidden', !allowed);
+    el.setAttribute('aria-hidden', String(!allowed));
+  });
+  $$('.nav-group').forEach(group => {
+    group.classList.toggle('hidden', !group.querySelector('.nav-link:not(.hidden)'));
+  });
 }
 
 async function doLogin() {
   const username = $('#login-username').value.trim();
   const password = $('#login-password').value;
+  const error = $('#login-error');
+  error.classList.add('hidden');
   if (!username || !password) {
-    UI.showToast('请输入用户名和密码', 'warning');
-    return;
+    error.textContent = '请输入账号和密码'; error.classList.remove('hidden'); return;
   }
-  const btn = $('#login-btn');
-  btn.disabled = true;
-  btn.textContent = '登录中...';
+  const btn = $('#login-btn'); btn.disabled = true; btn.innerHTML = '<span class="spinner spinner-sm"></span><span>正在登录</span>';
   try {
-    const res = await api('/auth/login', { method: 'POST', body: { username, password } });
-    setToken(res.data.token);
-    setUser(res.data.user);
-    UI.showToast('登录成功', 'success');
-    showApp();
+    const res = await api('/auth/login', { method: 'POST', body: { username, password }, silent: true });
+    setToken(res.data.token); setUser(res.data.user);
+    if ($('#remember-user').checked) localStorage.setItem('itrm_remembered_user', username);
+    else localStorage.removeItem('itrm_remembered_user');
+    await showApp();
   } catch (e) {
-    UI.showToast(e.message || '登录失败', 'error');
+    error.textContent = e.message || '登录失败，请检查账号和密码'; error.classList.remove('hidden');
   } finally {
-    btn.disabled = false;
-    btn.textContent = '登 录';
+    btn.disabled = false; btn.innerHTML = '<span>登录平台</span><span aria-hidden="true">→</span>';
   }
 }
 
 function doLogout() {
-  UI.confirm({
-    title: '退出登录',
-    message: '确定要退出登录吗？',
-    onOk: () => {
-      setToken(null);
-      setUser(null);
-      showLogin();
-    },
-  });
+  UI.confirm({ title: '退出登录', message: '确定退出当前账号吗？', okText: '退出', onOk: () => {
+    resetState(); UI.closeModal(); showLogin();
+  }});
 }
 
-// ---------- 导航 & 面包屑 ----------
-
-function updateBreadcrumb(view) {
-  const title = viewTitles[view] || view;
-  const rootEl = $('#breadcrumb-root');
-  const currentEl = $('#breadcrumb-current');
-
-  if (rootEl) {
-    rootEl.textContent = '首页';
+export async function renderView(view) {
+  const config = views[view] || views.dashboard;
+  if (!hasPermission(config.permission)) {
+    UI.showToast('你没有访问此模块的权限', 'warning'); return;
   }
-  if (currentEl) {
-    currentEl.textContent = title;
-  }
-
-  // 兼容旧版面包屑（单元素）
-  const legacyEl = $('#breadcrumb');
-  if (legacyEl) {
-    legacyEl.textContent = title;
-  }
-}
-
-function renderView(view) {
   state.view = view;
-
-  // 更新导航激活状态
-  $$('.nav-link').forEach(n => n.classList.toggle('active', n.dataset.view === view));
-
-  // 更新面包屑
-  updateBreadcrumb(view);
-
-  // 渲染视图
-  const renderer = viewRenderers[view] || renderDashboard;
+  $$('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.view === view));
+  $('#breadcrumb-current').textContent = config.title;
+  closeMobileSidebar();
+  $('#page').innerHTML = '<div class="page-loading"><span class="spinner"></span><span>正在加载</span></div>';
   try {
-    renderer();
+    await config.render();
+    applyPermissions($('#page'));
   } catch (e) {
-    UI.showToast(`加载视图失败: ${e.message}`, 'error');
+    $('#page').innerHTML = `<div class="page-container">${UI.emptyState('!', esc(e.message || '页面加载失败'))}</div>`;
+    UI.showToast(e.message || '页面加载失败', 'error');
   }
 }
 
-// ---------- 占位视图：审批模板 ----------
-
-function renderTemplates() {
-  const content = $('#view-content');
-  if (!content) return;
-  content.innerHTML = `
-    <div class="view-header">
-      <h2>审批模板</h2>
-    </div>
-    ${UI.emptyState('&#9776;', '审批模板功能开发中，敬请期待')}
-  `;
+async function updatePendingBadge() {
+  if (!hasPermission('requirement:view')) return;
+  try {
+    const res = await api('/requirements/stats', { silent: true });
+    const d = res?.data || {};
+    const value = d.pendingReceive ?? d.pending ?? d.PENDING_RECEIVE ?? 0;
+    $('#nav-pending-count').textContent = value > 99 ? '99+' : value;
+    $('#nav-pending-count').classList.toggle('hidden', !value);
+  } catch { $('#nav-pending-count')?.classList.add('hidden'); }
 }
 
-// ---------- 全局容器事件绑定 ----------
-
-function initGlobalContainers() {
-  // 全局弹窗关闭按钮事件委托
-  document.addEventListener('click', e => {
-    // 关闭按钮
-    if (e.target.closest('[data-modal-close]')) {
-      UI.closeModal();
-    }
-    if (e.target.closest('[data-drawer-close]')) {
-      UI.closeDrawer();
-    }
+function openGlobalSearch() {
+  const modal = UI.showModal({ title: '全局搜索', body: `
+    <div class="command-search"><span>⌕</span><input id="command-query" autofocus placeholder="输入需求标题、编号或负责人..."></div>
+    <div id="command-results" class="command-results"><div class="command-hint">输入至少 2 个字开始搜索</div></div>`, footer: '' });
+  const input = modal.querySelector('#command-query');
+  const results = modal.querySelector('#command-results');
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer); const q = input.value.trim();
+    if (q.length < 2) { results.innerHTML = '<div class="command-hint">输入至少 2 个字开始搜索</div>'; return; }
+    results.innerHTML = '<div class="command-hint">搜索中...</div>';
+    timer = setTimeout(async () => {
+      try {
+        const res = await api(`/requirements?keyword=${encodeURIComponent(q)}&page=0&size=8`, { silent: true });
+        const items = res?.data?.content || res?.data?.items || [];
+        results.innerHTML = items.length ? items.map(r => `<button class="command-result" data-id="${r.id}"><span><strong>${esc(r.title)}</strong><small>${esc(r.reqNo || '')} · ${esc(r.sourceDept || '未分组')}</small></span><span>→</span></button>`).join('') : '<div class="command-hint">没有匹配的需求</div>';
+        results.querySelectorAll('.command-result').forEach(btn => btn.onclick = async () => { sessionStorage.setItem('itrm_current_req_id', btn.dataset.id); UI.closeModal(); await renderView('requirements'); });
+      } catch (e) { results.innerHTML = `<div class="command-hint">${esc(e.message)}</div>`; }
+    }, 250);
   });
+  setTimeout(() => input.focus(), 50);
+}
 
-  // ESC 键关闭弹窗/抽屉
+function openNotifications() {
+  UI.showDrawer({ title: '消息与待办', width: '420px', content: `
+    <div class="notification-list">
+      <div class="notification-item unread"><span class="notification-type blue">审</span><div><strong>需求评审待办</strong><p>待接收与待评审的需求会显示在需求池。</p><button class="btn btn-secondary btn-sm" data-go="requirements">查看需求池</button></div></div>
+      <div class="notification-item"><span class="notification-type green">报</span><div><strong>数据已实时汇总</strong><p>可在统计分析中查看交付趋势、工时与质量指标。</p><button class="btn btn-secondary btn-sm" data-go="reports">打开统计</button></div></div>
+    </div>` });
+  document.querySelectorAll('[data-go]').forEach(btn => btn.onclick = () => { UI.closeDrawer(); renderView(btn.dataset.go); });
+}
+
+function quickCreate() {
+  renderView('requirements').then(() => setTimeout(() => document.querySelector('[data-action="new-req"]')?.click(), 50));
+}
+
+function openMobileSidebar() { $('#sidebar').classList.add('open'); $('#sidebar-mask').classList.add('show'); }
+function closeMobileSidebar() { $('#sidebar')?.classList.remove('open'); $('#sidebar-mask')?.classList.remove('show'); }
+
+function bindEvents() {
+  $('#login-btn')?.addEventListener('click', doLogin);
+  $('#login-password')?.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  $('#logout-btn')?.addEventListener('click', doLogout);
+  $$('.nav-link').forEach(link => link.addEventListener('click', e => { e.preventDefault(); renderView(link.dataset.view); }));
+  $('#quick-create-btn')?.addEventListener('click', quickCreate);
+  $('#global-search-btn')?.addEventListener('click', openGlobalSearch);
+  $('#notification-btn')?.addEventListener('click', openNotifications);
+  $('#mobile-menu-btn')?.addEventListener('click', openMobileSidebar);
+  $('#sidebar-mask')?.addEventListener('click', closeMobileSidebar);
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      UI.closeModal();
-      UI.closeDrawer();
-    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openGlobalSearch(); }
+    if (e.key === 'Escape') { UI.closeModal(); UI.closeDrawer(); closeMobileSidebar(); }
   });
-}
-
-function initNavigation() {
-  $$('.nav-link').forEach(link => {
-    link.addEventListener('click', e => {
-      e.preventDefault();
-      const view = link.dataset.view;
-      if (view) renderView(view);
-    });
+  document.addEventListener('itrm:permissions-rendered', () => applyPermissions(document));
+  const permissionObserver = new MutationObserver(mutations => {
+    if (mutations.some(m => m.addedNodes.length)) applyPermissions(document);
   });
+  permissionObserver.observe(document.body, { childList: true, subtree: true });
 }
-
-// ---------- Boot ----------
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 登录相关
-  $('#login-btn')?.addEventListener('click', doLogin);
-  $('#login-password')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
-  });
-  $('#logout-btn')?.addEventListener('click', doLogout);
-
-  // 全局容器初始化
-  initGlobalContainers();
-
-  // 导航初始化
-  initNavigation();
-
-  // 判断是否已登录
-  if (getToken() && getUser()) {
-    showApp();
-  } else {
-    showLogin();
-  }
+  bindEvents();
+  if (getToken() && getUser()) showApp(); else showLogin();
 });

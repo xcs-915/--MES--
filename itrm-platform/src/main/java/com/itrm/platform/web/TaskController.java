@@ -4,6 +4,7 @@ import com.itrm.platform.common.ApiResponse;
 import com.itrm.platform.domain.Task;
 import com.itrm.platform.service.TaskService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ public class TaskController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('task:create')")
     public ApiResponse<Task> create(@RequestBody Map<String, Object> body) {
         Long requirementId = Long.valueOf(body.get("requirementId").toString());
         Task task = new Task();
@@ -50,35 +52,41 @@ public class TaskController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('task:edit')")
     public ApiResponse<Task> update(@PathVariable Long id, @RequestBody Task task) {
         return ApiResponse.ok(taskService.update(id, task));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('task:delete')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         taskService.delete(id);
         return ApiResponse.ok();
     }
 
     @PutMapping("/{id}/status")
+    @PreAuthorize("hasAuthority('task:transition')")
     public ApiResponse<Task> changeStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
         return ApiResponse.ok(taskService.changeStatus(id, status));
     }
 
     @PutMapping("/{id}/assignee")
+    @PreAuthorize("hasAuthority('task:assign')")
     public ApiResponse<Task> updateAssignee(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String assignee = body.get("assignee");
         return ApiResponse.ok(taskService.updateAssignee(id, assignee));
     }
 
     @PutMapping("/{id}/progress")
+    @PreAuthorize("hasAuthority('task:transition')")
     public ApiResponse<Task> updateProgress(@PathVariable Long id, @RequestBody Map<String, Integer> body) {
         Integer progress = body.get("progress");
         return ApiResponse.ok(taskService.updateProgress(id, progress));
     }
 
     @PutMapping("/{id}/move")
+    @PreAuthorize("hasAuthority('board:move')")
     public ApiResponse<Task> moveTask(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String direction = body.get("direction");
         return ApiResponse.ok(taskService.moveTask(id, direction));

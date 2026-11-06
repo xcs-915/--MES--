@@ -42,6 +42,16 @@ export function getUser() {
   return null;
 }
 
+export function getPermissions() {
+  const user = getUser();
+  return Array.isArray(user?.permissions) ? user.permissions : [];
+}
+
+export function hasPermission(code) {
+  if (!code) return true;
+  return getPermissions().includes(code);
+}
+
 /** 设置当前需求 ID */
 export function setCurrentReqId(id) {
   state.currentReqId = id;

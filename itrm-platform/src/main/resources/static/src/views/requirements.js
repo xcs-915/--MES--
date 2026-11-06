@@ -9,7 +9,7 @@ const $qa = (sel, ctx) => [...(ctx || document).querySelectorAll(sel)];
 
 // ==================== 常量配置 ====================
 
-const STATUS_LIST = [
+let STATUS_LIST = [
   { value: 'PENDING_RECEIVE', label: '待接收' },
   { value: 'PENDING_PLAN', label: '待排期' },
   { value: 'IN_DEVELOPMENT', label: '开发中' },
@@ -87,6 +87,19 @@ let currentDrawer = null;
 // ==================== 页面主渲染 ====================
 
 export async function renderRequirements() {
+  try {
+    const statusRes = await api('/workflow-statuses', { silent: true });
+    const configured = (statusRes?.data || []).filter(s => s.status === 'ACTIVE');
+    if (configured.length) {
+      STATUS_LIST = configured.map(s => ({ value: s.code, label: s.name }));
+      configured.forEach(s => { if (!STATUS_MAP[s.code]) STATUS_MAP[s.code] = { label: s.name, cls: 'badge-status-backlog' }; });
+    }
+  } catch { /* use built-in status catalogue */ }
+  const dashboardStatus = sessionStorage.getItem('itrm_dashboard_status');
+  if (dashboardStatus) {
+    currentFilters.statusList = [dashboardStatus];
+    sessionStorage.removeItem('itrm_dashboard_status');
+  }
   const page = $('#page');
   page.innerHTML = `
     <div class="page-container">
@@ -105,7 +118,7 @@ export async function renderRequirements() {
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18"></rect><rect x="14" y="3" width="7" height="12"></rect></svg>
             </button>
           </div>
-          <button class="btn btn-primary" data-action="new-req">
+          <button class="btn btn-primary" data-action="new-req" data-permission="requirement:create">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             新建需求
           </button>
@@ -142,8 +155,8 @@ export async function renderRequirements() {
         <div class="filter-row">
           <span class="filter-label">状态</span>
           <div class="tag-filter" id="status-filter">
-            <span class="tag-filter-item active" data-status="">全部</span>
-            ${STATUS_LIST.map(s => `<span class="tag-filter-item" data-status="${s.value}">${s.label}</span>`).join('')}
+            <span class="tag-filter-item ${currentFilters.statusList.length ? '' : 'active'}" data-status="">全部</span>
+            ${STATUS_LIST.map(s => `<span class="tag-filter-item ${currentFilters.statusList.includes(s.value) ? 'active' : ''}" data-status="${s.value}">${s.label}</span>`).join('')}
           </div>
         </div>
       </div>
@@ -159,7 +172,7 @@ export async function renderRequirements() {
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             导出
           </button>
-          <button class="btn btn-secondary btn-sm" data-action="batch-assign" disabled>批量指派</button>
+          <button class="btn btn-secondary btn-sm" data-action="batch-assign" data-permission="requirement:plan" disabled>批量指派</button>
           <button class="btn btn-secondary btn-sm" data-action="refresh">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
           </button>
@@ -300,7 +313,7 @@ function renderTableRow(item) {
       <td style="text-align:right;padding-right:16px">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
           <button class="btn btn-ghost btn-sm" data-action="view-req" data-id="${id}">查看</button>
-          ${canEdit(item.status) ? `<button class="btn btn-ghost btn-sm" data-action="edit-req" data-id="${id}">编辑</button>` : ''}
+          ${canEdit(item.status) ? `<button class="btn btn-ghost btn-sm" data-action="edit-req" data-id="${id}" data-permission="requirement:edit">编辑</button>` : ''}
           <div class="dropdown" style="display:inline-block">
             <button class="btn btn-ghost btn-sm" data-action="more-req" data-id="${id}">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
@@ -598,10 +611,10 @@ function toggleMoreMenu(btn, id) {
   menu.style.cssText = 'position:fixed;z-index:1000';
   menu.innerHTML = `
     <div class="dropdown-item" data-action="view-req" data-id="${id}">查看详情</div>
-    ${canEdit(currentItems.find(i => String(i.id) === String(id))?.status) ? `<div class="dropdown-item" data-action="edit-req" data-id="${id}">编辑</div>` : ''}
+    ${canEdit(currentItems.find(i => String(i.id) === String(id))?.status) ? `<div class="dropdown-item" data-action="edit-req" data-id="${id}" data-permission="requirement:edit">编辑</div>` : ''}
     <div class="dropdown-item" data-action="copy-req" data-id="${id}">复制需求</div>
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item danger" data-action="delete-req" data-id="${id}">删除</div>
+    <div class="dropdown-item danger" data-action="delete-req" data-id="${id}" data-permission="requirement:delete">删除</div>
   `;
 
   const rect = btn.getBoundingClientRect();
@@ -992,28 +1005,28 @@ function renderDetailActionButtons(req) {
 
   switch (status) {
     case 'DRAFT':
-      buttons.push(`<button class="btn btn-primary btn-sm" data-action="submit-req">提交需求</button>`);
-      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="edit-req">编辑</button>`);
-      buttons.push(`<button class="btn btn-ghost btn-sm" data-action="delete-req">删除</button>`);
+      buttons.push(`<button class="btn btn-primary btn-sm" data-action="submit-req" data-permission="requirement:submit">提交需求</button>`);
+      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="edit-req" data-permission="requirement:edit">编辑</button>`);
+      buttons.push(`<button class="btn btn-ghost btn-sm" data-action="delete-req" data-permission="requirement:delete">删除</button>`);
       break;
     case 'PENDING_RECEIVE':
-      buttons.push(`<button class="btn btn-primary btn-sm" data-action="receive-req">接收需求</button>`);
-      buttons.push(`<button class="btn btn-danger btn-sm" data-action="reject-req">驳回</button>`);
+      buttons.push(`<button class="btn btn-primary btn-sm" data-action="receive-req" data-permission="requirement:receive">接收需求</button>`);
+      buttons.push(`<button class="btn btn-danger btn-sm" data-action="reject-req" data-permission="requirement:review">驳回</button>`);
       break;
     case 'PENDING_PLAN':
-      buttons.push(`<button class="btn btn-primary btn-sm" data-action="plan-req">排期分配</button>`);
+      buttons.push(`<button class="btn btn-primary btn-sm" data-action="plan-req" data-permission="requirement:plan">排期分配</button>`);
       break;
     case 'IN_DEVELOPMENT':
-      buttons.push(`<button class="btn btn-primary btn-sm" data-action="start-testing-req">转测试</button>`);
-      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="update-progress-req">更新进度</button>`);
+      buttons.push(`<button class="btn btn-primary btn-sm" data-action="start-testing-req" data-permission="test:transition">转测试</button>`);
+      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="update-progress-req" data-permission="task:transition">更新进度</button>`);
       break;
     case 'IN_TESTING':
-      buttons.push(`<button class="btn btn-primary btn-sm" data-action="finish-testing-req">测试完成</button>`);
-      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="test-fail-req">测试不通过</button>`);
+      buttons.push(`<button class="btn btn-primary btn-sm" data-action="finish-testing-req" data-permission="test:transition">测试完成</button>`);
+      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="test-fail-req" data-permission="test:transition">测试不通过</button>`);
       break;
     case 'PENDING_RELEASE':
-      buttons.push(`<button class="btn btn-primary btn-sm" data-action="release-success-req">发布成功</button>`);
-      buttons.push(`<button class="btn btn-danger btn-sm" data-action="release-fail-req">发布失败</button>`);
+      buttons.push(`<button class="btn btn-primary btn-sm" data-action="release-success-req" data-permission="requirement:release">发布成功</button>`);
+      buttons.push(`<button class="btn btn-danger btn-sm" data-action="release-fail-req" data-permission="requirement:release">发布失败</button>`);
       break;
     case 'COMPLETED':
       buttons.push(`<button class="btn btn-secondary btn-sm" data-action="reopen-req">重新打开</button>`);
@@ -1286,7 +1299,7 @@ function renderTasksTab(tasks, req) {
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div style="font-size:13px;font-weight:500;color:var(--it-color-text-primary)">任务列表</div>
-      <button class="btn btn-primary btn-sm" data-action="add-task">+ 新增任务</button>
+      <button class="btn btn-primary btn-sm" data-action="add-task" data-permission="task:create">+ 新增任务</button>
     </div>
     ${tasks.length ? `
       <table class="data-table" style="font-size:12px">

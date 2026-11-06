@@ -4,6 +4,7 @@ import com.itrm.platform.common.ApiResponse;
 import com.itrm.platform.domain.TimeLog;
 import com.itrm.platform.service.TimeLogService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -31,6 +32,7 @@ public class TimeLogController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('timelog:create')")
     public ApiResponse<TimeLog> create(@RequestBody Map<String, Object> body) {
         Long requirementId = Long.valueOf(body.get("requirementId").toString());
         Long taskId = body.get("taskId") != null ? Long.valueOf(body.get("taskId").toString()) : null;
@@ -48,6 +50,7 @@ public class TimeLogController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('timelog:delete')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         timeLogService.delete(id);
         return ApiResponse.ok();

@@ -42,16 +42,6 @@ data:
       jwt:
         secret: itrm-platform-secret-key-please-change-in-production
         expiration: 86400000
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: itrm-secrets
-  namespace: itrm
-type: Opaque
-stringData:
-  db-password: "Taiking@5563"
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,7 +61,7 @@ spec:
     spec:
       containers:
         - name: itrm-platform
-          image: itrm-platform:v7
+          image: itrm-platform:v8
           imagePullPolicy: Never
           ports:
             - name: http

@@ -59,7 +59,7 @@ export async function renderBoard() {
               ${loadingState()}
             </div>
             <div style="flex-shrink:0;padding:8px 12px 12px;border-top:1px solid var(--it-color-border-light)">
-              <button class="btn" data-action="add-req" data-status="${col.key}" style="width:100%;justify-content:center;gap:6px;background:transparent;border:1px dashed var(--it-color-border);color:var(--it-color-text-tertiary);font-size:12px;padding:6px 12px;transition:all var(--it-transition-fast)">
+              <button class="btn" data-action="add-req" data-status="${col.key}" data-permission="requirement:create" style="width:100%;justify-content:center;gap:6px;background:transparent;border:1px dashed var(--it-color-border);color:var(--it-color-text-tertiary);font-size:12px;padding:6px 12px;transition:all var(--it-transition-fast)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 添加需求
               </button>
@@ -238,12 +238,12 @@ function renderCard(req, columnStatus) {
 
       <div class="card-actions" style="display:flex;gap:4px;padding-top:8px;border-top:1px solid var(--it-color-border-light);opacity:0;transition:opacity .15s ease">
         ${prevStatus ? `
-          <button class="btn" data-action="move-prev" data-id="${esc(req.id)}" style="flex:1;font-size:11px;padding:4px 8px;background:transparent;border:1px solid var(--it-color-border);color:var(--it-color-text-tertiary)" title="移到上一列">
+          <button class="btn" data-action="move-prev" data-id="${esc(req.id)}" data-permission="board:move" style="flex:1;font-size:11px;padding:4px 8px;background:transparent;border:1px solid var(--it-color-border);color:var(--it-color-text-tertiary)" title="移到上一列">
             ← 上一步
           </button>
         ` : '<span style="flex:1"></span>'}
         ${flow.next ? `
-          <button class="btn" data-action="move-next" data-id="${esc(req.id)}" style="flex:1;font-size:11px;padding:4px 8px;background:var(--it-color-primary-bg);border:1px solid var(--it-color-primary-lighter);color:var(--it-color-primary)" title="移到下一列">
+          <button class="btn" data-action="move-next" data-id="${esc(req.id)}" data-permission="board:move" style="flex:1;font-size:11px;padding:4px 8px;background:var(--it-color-primary-bg);border:1px solid var(--it-color-primary-lighter);color:var(--it-color-primary)" title="移到下一列">
             下一步 →
           </button>
         ` : '<span style="flex:1"></span>'}

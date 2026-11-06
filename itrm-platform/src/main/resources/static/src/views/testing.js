@@ -33,7 +33,7 @@ export async function renderTesting() {
     <div class="page-container">
       <div class="page-header">
         <h2>测试验收</h2>
-        <button class="btn primary" data-action="new-test">+ 新建记录</button>
+        <button class="btn primary" data-action="new-test" data-permission="test:create">+ 新建记录</button>
       </div>
 
       <div class="tabs">
@@ -201,9 +201,9 @@ async function loadRecords() {
             <td>${formatDate(item.createdAt)}</td>
             <td class="actions">
               <button class="btn-link" data-action="view-test" data-id="${esc(item.id)}">详情</button>
-              <button class="btn-link" data-action="resolve-test" data-id="${esc(item.id)}">解决</button>
-              <button class="btn-link" data-action="close-test" data-id="${esc(item.id)}">关闭</button>
-              <button class="btn-link danger" data-action="delete-test" data-id="${esc(item.id)}">删除</button>
+              <button class="btn-link" data-action="resolve-test" data-id="${esc(item.id)}" data-permission="test:transition">解决</button>
+              <button class="btn-link" data-action="close-test" data-id="${esc(item.id)}" data-permission="test:transition">关闭</button>
+              <button class="btn-link danger" data-action="delete-test" data-id="${esc(item.id)}" data-permission="test:delete">删除</button>
             </td>
           </tr>
         `).join('')}
@@ -350,9 +350,9 @@ async function openTestDetail(id) {
       </div>
 
       <div class="detail-actions">
-        <button class="btn" data-action="resolve-test" data-id="${esc(record.id)}">标记解决</button>
-        <button class="btn" data-action="close-test" data-id="${esc(record.id)}">关闭</button>
-        <button class="btn danger" data-action="delete-test" data-id="${esc(record.id)}">删除</button>
+        <button class="btn" data-action="resolve-test" data-id="${esc(record.id)}" data-permission="test:transition">标记解决</button>
+        <button class="btn" data-action="close-test" data-id="${esc(record.id)}" data-permission="test:transition">关闭</button>
+        <button class="btn danger" data-action="delete-test" data-id="${esc(record.id)}" data-permission="test:delete">删除</button>
       </div>
     `;
 

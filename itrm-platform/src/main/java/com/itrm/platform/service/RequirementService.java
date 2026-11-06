@@ -85,9 +85,11 @@ public class RequirementService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 500));
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "updatedAt"));
         Page<Requirement> result = requirementRepository.findAll(spec, pageable);
-        return new PageResponse<>(result.getContent(), result.getTotalElements(), page, size);
+        return new PageResponse<>(result.getContent(), result.getTotalElements(), safePage, safeSize);
     }
 
     @Transactional(readOnly = true)

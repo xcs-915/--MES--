@@ -8,8 +8,8 @@ spring:
     name: itrm-platform
   datasource:
     url: jdbc:sqlserver://10.30.10.141:1433;databaseName=TNS_MES;encrypt=false;trustServerCertificate=true
-    username: sa
-    password: Taiking@5563
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
     hikari:
       maximum-pool-size: 20
@@ -32,7 +32,7 @@ spring:
 
 app:
   jwt:
-    secret: itrm-platform-secret-key-please-change-in-production-2026
+    secret: ${APP_JWT_SECRET:itrm-platform-local-development-secret-key}
     expiration: 86400000
   default-admin:
     username: admin

@@ -24,7 +24,7 @@ export async function renderTimelog() {
     <div class="page-container">
       <div class="page-header">
         <h2>工时管理</h2>
-        <button class="btn primary" data-action="new-log">+ 登记工时</button>
+        <button class="btn primary" data-action="new-log" data-permission="timelog:create">+ 登记工时</button>
       </div>
 
       <div class="timelog-layout">
@@ -194,7 +194,7 @@ async function loadLogs() {
               <td>${esc(item.hours || 0)}</td>
               <td class="ellipsis" title="${esc(item.description || '')}">${esc(item.description || '-')}</td>
               <td class="actions">
-                <button class="btn-link danger" data-action="delete-log" data-id="${esc(item.id)}">删除</button>
+                <button class="btn-link danger" data-action="delete-log" data-id="${esc(item.id)}" data-permission="timelog:delete">删除</button>
               </td>
             </tr>
           `).join('')}

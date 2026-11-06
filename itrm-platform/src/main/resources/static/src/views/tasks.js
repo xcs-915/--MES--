@@ -29,7 +29,7 @@ export async function renderTasks() {
     <div class="page-container">
       <div class="page-header">
         <h2>任务管理</h2>
-        <button class="btn primary" data-action="new-task">+ 新建任务</button>
+        <button class="btn primary" data-action="new-task" data-permission="task:create">+ 新建任务</button>
       </div>
 
       <div class="filter-bar">
@@ -186,8 +186,8 @@ function renderTaskTable(items) {
           <td><div style="display:flex;align-items:center;min-width:80px">${progressBar(item.progress || 0)}</div></td>
           <td>${formatDate(item.dueDate)}</td>
           <td class="actions">
-            <button class="btn-link" data-action="edit-task" data-id="${esc(item.id)}">编辑</button>
-            <button class="btn-link danger" data-action="delete-task" data-id="${esc(item.id)}">删除</button>
+            <button class="btn-link" data-action="edit-task" data-id="${esc(item.id)}" data-permission="task:edit">编辑</button>
+            <button class="btn-link danger" data-action="delete-task" data-id="${esc(item.id)}" data-permission="task:delete">删除</button>
           </td>
         </tr>
       `).join('')}

@@ -4,6 +4,7 @@ import com.itrm.platform.common.ApiResponse;
 import com.itrm.platform.domain.TestRecord;
 import com.itrm.platform.service.TestRecordService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ public class TestRecordController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('test:create')")
     public ApiResponse<TestRecord> create(@RequestBody Map<String, Object> body) {
         Long requirementId = Long.valueOf(body.get("requirementId").toString());
         Long taskId = body.get("taskId") != null ? Long.valueOf(body.get("taskId").toString()) : null;
@@ -46,28 +48,33 @@ public class TestRecordController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('test:edit')")
     public ApiResponse<TestRecord> update(@PathVariable Long id, @RequestBody TestRecord record) {
         return ApiResponse.ok(testRecordService.update(id, record));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('test:delete')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         testRecordService.delete(id);
         return ApiResponse.ok();
     }
 
     @PostMapping("/{id}/resolve")
+    @PreAuthorize("hasAuthority('test:transition')")
     public ApiResponse<TestRecord> resolve(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
         String handler = body != null ? body.get("handler") : null;
         return ApiResponse.ok(testRecordService.resolve(id, handler));
     }
 
     @PostMapping("/{id}/close")
+    @PreAuthorize("hasAuthority('test:transition')")
     public ApiResponse<TestRecord> close(@PathVariable Long id) {
         return ApiResponse.ok(testRecordService.close(id));
     }
 
     @PostMapping("/{id}/accept")
+    @PreAuthorize("hasAuthority('test:transition')")
     public ApiResponse<TestRecord> accept(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String result = body.get("result");
         String acceptBy = body.get("acceptBy");

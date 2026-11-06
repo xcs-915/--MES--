@@ -5,6 +5,7 @@ import com.itrm.platform.domain.ApprovalNode;
 import com.itrm.platform.domain.ApprovalTemplate;
 import com.itrm.platform.service.ApprovalTemplateService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,7 @@ public class ApprovalTemplateController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('workflow:manage')")
     public ApiResponse<ApprovalTemplate> create(@RequestBody Map<String, Object> body) {
         ApprovalTemplate template = new ApprovalTemplate();
         template.setName((String) body.get("name"));
@@ -65,6 +67,7 @@ public class ApprovalTemplateController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('workflow:manage')")
     public ApiResponse<ApprovalTemplate> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         ApprovalTemplate template = new ApprovalTemplate();
         template.setName((String) body.get("name"));
@@ -99,6 +102,7 @@ public class ApprovalTemplateController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('workflow:manage')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         approvalTemplateService.delete(id);
         return ApiResponse.ok();
