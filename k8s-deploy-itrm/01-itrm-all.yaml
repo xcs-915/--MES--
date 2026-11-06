@@ -42,6 +42,7 @@ data:
       jwt:
         secret: itrm-platform-secret-key-please-change-in-production
         expiration: 86400000
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
