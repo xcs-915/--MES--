@@ -13,6 +13,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import com.itrm.platform.security.ItrmUser;
+import com.itrm.platform.security.ItrmUserRepository;
 
 import javax.persistence.criteria.Predicate;
 import java.math.BigDecimal;
@@ -20,7 +22,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Arrays;
@@ -46,6 +50,10 @@ public class RequirementService {
     private final ApprovalRecordRepository approvalRecordRepository;
     private final ChangeLogRepository changeLogRepository;
     private final TestRecordRepository testRecordRepository;
+    private final ItrmUserRepository userRepository;
+    private final NotificationService notificationService;
+    private static final List<String> RECEIVER_USERS = Arrays.asList("TKWZ25120101", "TK04042", "TK26052503", "TK26052002");
+    private static final List<String> APPROVER_USERS = Arrays.asList("TK03599", "TK04729");
 
     public RequirementService(RequirementRepository requirementRepository,
                               TaskRepository taskRepository,
@@ -53,7 +61,9 @@ public class RequirementService {
                               ApprovalNodeRepository approvalNodeRepository,
                               ApprovalRecordRepository approvalRecordRepository,
                               ChangeLogRepository changeLogRepository,
-                              TestRecordRepository testRecordRepository) {
+                              TestRecordRepository testRecordRepository,
+                              ItrmUserRepository userRepository,
+                              NotificationService notificationService) {
         this.requirementRepository = requirementRepository;
         this.taskRepository = taskRepository;
         this.approvalTemplateRepository = approvalTemplateRepository;
@@ -61,6 +71,8 @@ public class RequirementService {
         this.approvalRecordRepository = approvalRecordRepository;
         this.changeLogRepository = changeLogRepository;
         this.testRecordRepository = testRecordRepository;
+        this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     private String getCurrentUser() {
@@ -73,8 +85,12 @@ public class RequirementService {
     public PageResponse<Requirement> page(String keyword, String status, String urgency,
                                           String category, String sourceDept, String assignee,
                                           int page, int size) {
+        ItrmUser currentUser = userRepository.findByUsername(getCurrentUser()).orElse(null);
         Specification<Requirement> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+            if (currentUser != null && "THIRD_PARTY".equals(currentUser.getRole())) {
+                predicates.add(cb.or(cb.equal(root.get("receiver"), currentUser.getUsername()), cb.equal(root.get("devOwner"), currentUser.getUsername())));
+            }
             if (StringUtils.hasText(keyword)) {
                 String like = "%" + keyword + "%";
                 predicates.add(cb.or(
@@ -109,8 +125,27 @@ public class RequirementService {
 
     @Transactional(readOnly = true)
     public Requirement get(Long id) {
-        return requirementRepository.findById(id)
+        Requirement requirement = requirementRepository.findById(id)
                 .orElseThrow(() -> new BizException(404, "需求不存在"));
+        ItrmUser currentUser = userRepository.findByUsername(getCurrentUser()).orElse(null);
+        if (currentUser != null && "THIRD_PARTY".equals(currentUser.getRole())
+                && !currentUser.getUsername().equals(requirement.getReceiver())
+                && !currentUser.getUsername().equals(requirement.getDevOwner())) {
+            throw new BizException(403, "第三方用户只能查看分配给自己的需求");
+        }
+        return requirement;
+    }
+
+    @Transactional
+    public Requirement assignReceiver(Long id, String username) {
+        Requirement requirement = get(id);
+        if (!"PENDING_RECEIVE".equals(requirement.getStatus())) throw new BizException(400, "只有待接收需求可以指派接收人");
+        ItrmUser receiver = userRepository.findByUsername(username).orElseThrow(() -> new BizException(404, "接收人不存在"));
+        if (!"ACTIVE".equals(receiver.getStatus())) throw new BizException(400, "接收人账号已停用");
+        requirement.setReceiver(username);
+        Requirement saved = requirementRepository.save(requirement);
+        notificationService.notifyUsers(Collections.singletonList(username), id, "RECEIVER_ASSIGNED", "有新需求待接收", "需求《" + requirement.getTitle() + "》已指派给你接收");
+        return saved;
     }
 
     // ==================== CRUD ====================
@@ -118,18 +153,24 @@ public class RequirementService {
     @Transactional
     public Requirement create(Requirement request) {
         validateInput(request);
+        ItrmUser currentUser = userRepository.findByUsername(getCurrentUser())
+                .orElseThrow(() -> new BizException(401, "当前用户不存在"));
+        if (!StringUtils.hasText(currentUser.getDepartment())) {
+            throw new BizException(400, "当前用户未设置部门，请联系管理员完善用户档案");
+        }
         Requirement req = new Requirement();
         req.setReqNo(generateReqNo());
         req.setTitle(request.getTitle());
         req.setCategory(request.getCategory());
         req.setUrgency(request.getUrgency() != null ? request.getUrgency() : "MEDIUM");
         req.setBelongSystem(request.getBelongSystem());
-        req.setSourceDept(request.getSourceDept());
-        req.setProposer(request.getProposer());
+        req.setSourceDept(currentUser.getDepartment());
+        req.setProposer(StringUtils.hasText(currentUser.getRealName()) ? currentUser.getRealName() : currentUser.getUsername());
         req.setDescription(request.getDescription());
         req.setCurrentProblem(request.getCurrentProblem());
         req.setExpectedEffect(request.getExpectedEffect());
         req.setAcceptanceCriteria(request.getAcceptanceCriteria());
+        req.setExpectedCompletionDate(request.getExpectedCompletionDate());
         req.setStatus("DRAFT");
         req.setFeasibility(request.getFeasibility());
         req.setWorkloadEstimate(request.getWorkloadEstimate());
@@ -197,12 +238,19 @@ public class RequirementService {
         changed |= applyString(req, id, body, "category", "需求类型", req.getCategory(), req::setCategory, reason);
         changed |= applyString(req, id, body, "urgency", "紧急程度", req.getUrgency(), req::setUrgency, reason);
         changed |= applyString(req, id, body, "belongSystem", "所属系统", req.getBelongSystem(), req::setBelongSystem, reason);
-        changed |= applyString(req, id, body, "sourceDept", "来源部门", req.getSourceDept(), req::setSourceDept, reason);
-        changed |= applyString(req, id, body, "proposer", "提出人", req.getProposer(), req::setProposer, reason);
         changed |= applyString(req, id, body, "currentProblem", "当前问题", req.getCurrentProblem(), req::setCurrentProblem, reason);
         changed |= applyString(req, id, body, "expectedEffect", "预期效果", req.getExpectedEffect(), req::setExpectedEffect, reason);
         changed |= applyString(req, id, body, "acceptanceCriteria", "验收标准", req.getAcceptanceCriteria(), req::setAcceptanceCriteria, reason);
         changed |= applyString(req, id, body, "remark", "备注", req.getRemark(), req::setRemark, reason);
+        if (body.containsKey("expectedCompletionDate")) {
+            LocalDate next = body.get("expectedCompletionDate") == null || body.get("expectedCompletionDate").toString().isEmpty()
+                    ? null : LocalDate.parse(body.get("expectedCompletionDate").toString());
+            if (!Objects.equals(req.getExpectedCompletionDate(), next)) {
+                saveChangeLog(id, "期望完成时间", String.valueOf(req.getExpectedCompletionDate()), String.valueOf(next), reason);
+                req.setExpectedCompletionDate(next);
+                changed = true;
+            }
+        }
         if (body.containsKey("plannedEndDate")) {
             LocalDate next = body.get("plannedEndDate") == null || body.get("plannedEndDate").toString().isEmpty()
                     ? null : LocalDate.parse(body.get("plannedEndDate").toString());
@@ -272,8 +320,8 @@ public class RequirementService {
     @Transactional
     public void delete(Long id) {
         Requirement req = get(id);
-        if (!"DRAFT".equals(req.getStatus())) {
-            throw new BizException(400, "只有草稿状态的需求可以删除");
+        if (!"DRAFT".equals(req.getStatus()) && !StringUtils.hasText(req.getImportSource())) {
+            throw new BizException(400, "只有草稿或历史导入需求可以删除");
         }
         requirementRepository.delete(req);
     }
@@ -289,11 +337,14 @@ public class RequirementService {
         if (!"DRAFT".equals(req.getStatus())) {
             throw new BizException(400, "只有草稿状态的需求可以提交");
         }
+        if (req.getExpectedCompletionDate() == null) throw new BizException(400, "提交需求前请填写期望完成时间");
         String fromStatus = req.getStatus();
         req.setStatus("PENDING_RECEIVE");
         req.setSubmittedAt(Instant.now());
         requirementRepository.save(req);
         saveChangeLog(id, "status", fromStatus, "PENDING_RECEIVE", "提交需求");
+        notificationService.notifyUsers(RECEIVER_USERS, id, "REQUIREMENT_SUBMITTED", "新需求待接收",
+                String.format("%s %s 提出需求《%s》，期望 %s 完成，待接收", req.getSourceDept(), req.getProposer(), req.getTitle(), req.getExpectedCompletionDate()));
         return req;
     }
 
@@ -307,9 +358,11 @@ public class RequirementService {
         if (!"PENDING_RECEIVE".equals(req.getStatus())) {
             throw new BizException(400, "只有待接收状态的需求可以接收");
         }
-        if (!StringUtils.hasText(reviewOwner)) {
-            throw new BizException(400, "评审负责人不能为空");
-        }
+        ItrmUser operator = userRepository.findByUsername(getCurrentUser()).orElseThrow(() -> new BizException(401, "当前用户不存在"));
+        if (StringUtils.hasText(req.getReceiver()) && !req.getReceiver().equals(operator.getUsername()) && !"ADMIN".equals(operator.getRole()))
+            throw new BizException(403, "该需求已指派给其他接收人");
+        if ("THIRD_PARTY".equals(operator.getRole()) && !operator.getUsername().equals(req.getReceiver()))
+            throw new BizException(403, "第三方用户只能接收指派给自己的需求");
         if (templateId == null) {
             throw new BizException(400, "审批模板不能为空");
         }
@@ -325,7 +378,8 @@ public class RequirementService {
 
         String fromStatus = req.getStatus();
         req.setStatus("PENDING_DOCUMENT");
-        req.setReviewOwner(reviewOwner);
+        req.setReviewOwner(operator.getUsername());
+        req.setReceiver(operator.getUsername());
         req.setReceivedAt(Instant.now());
         req.setApprovalTemplateId(templateId);
         req.setApprovalNodeIdx(0);
@@ -333,6 +387,8 @@ public class RequirementService {
         requirementRepository.save(req);
         saveChangeLog(id, "预计完成时间", null, plannedEndDate.toString(), "IT接收需求时评估");
         saveChangeLog(id, "需求状态", fromStatus, "PENDING_DOCUMENT", "IT接收需求，待完善需求文档");
+        notificationService.notifyUsers(Collections.singletonList(req.getCreatedBy()), id, "REQUIREMENT_RECEIVED", "需求已接收",
+                String.format("%s 已接收需求《%s》，预计 %s 完成，待完善需求文档", operator.getRealName(), req.getTitle(), plannedEndDate));
         return req;
     }
 
@@ -365,6 +421,7 @@ public class RequirementService {
         req.setStatus("PENDING_APPROVAL");
         requirementRepository.save(req);
         saveChangeLog(id, "需求状态", "PENDING_DOCUMENT", "PENDING_APPROVAL", "需求文档完成，提交上级审批");
+        notificationService.notifyUsers(APPROVER_USERS, id, "APPROVAL_PENDING", "需求文档待审批", "需求《" + req.getTitle() + "》文档已输出，任一审批人通过后可转开发");
         return req;
     }
 
@@ -395,6 +452,9 @@ public class RequirementService {
 
         ApprovalNode currentNode = nodes.get(currentIdx);
         String approver = getCurrentUser();
+        if (StringUtils.hasText(currentNode.getApproverUser()) && !Arrays.asList(currentNode.getApproverUser().split(",")).contains(approver)) {
+            throw new BizException(403, "当前用户不是该节点审批人");
+        }
         String fromStatus = req.getStatus();
 
         if ("APPROVE".equals(action)) {
@@ -422,6 +482,7 @@ public class RequirementService {
                 req.setApprovalNodeIdx(nextIdx);
                 requirementRepository.save(req);
                 saveChangeLog(id, "需求状态", fromStatus, "APPROVED", "审批通过，待排期分配");
+                notificationService.notifyUsers(Arrays.asList(req.getReceiver(), req.getCreatedBy()), id, "APPROVAL_APPROVED", "需求审批通过", "需求《" + req.getTitle() + "》已审批通过，可指定开发人员");
             } else {
                 // 进入下一节点
                 req.setApprovalNodeIdx(nextIdx);
@@ -494,7 +555,24 @@ public class RequirementService {
         req.setActualStartDate(LocalDate.now());
         requirementRepository.save(req);
         saveChangeLog(id, "status", fromStatus, "IN_DEVELOPMENT", "排期分配开发");
+        notificationService.notifyUsers(Collections.singletonList(devOwner), id, "DEVELOPMENT_ASSIGNED", "开发任务已指派", "需求《" + req.getTitle() + "》已指派给你，预计完成时间：" + req.getPlannedEndDate());
         return req;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> developerWorkload(String username, BigDecimal additionalHours) {
+        ItrmUser user = userRepository.findByUsername(username).orElseThrow(() -> new BizException(404, "开发人员不存在"));
+        BigDecimal used = requirementRepository.findByDevOwner(username).stream()
+                .filter(item -> !Arrays.asList("COMPLETED", "REJECTED").contains(item.getStatus()))
+                .map(item -> item.getEstimatedHours() == null ? BigDecimal.ZERO : item.getEstimatedHours())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal capacity = user.getWorkloadCapacityHours() == null ? new BigDecimal("160") : user.getWorkloadCapacityHours();
+        BigDecimal incoming = additionalHours == null ? BigDecimal.ZERO : additionalHours;
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("username", username); result.put("realName", user.getRealName()); result.put("usedHours", used);
+        result.put("additionalHours", incoming); result.put("capacityHours", capacity); result.put("afterAssignmentHours", used.add(incoming));
+        result.put("overloaded", used.add(incoming).compareTo(capacity) > 0);
+        return result;
     }
 
     /**

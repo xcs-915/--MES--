@@ -83,6 +83,12 @@ public class RequirementController {
         return ApiResponse.ok(requirementService.receive(id, reviewOwner, templateId, plannedEndDate));
     }
 
+    @PostMapping("/{id}/assign-receiver")
+    @PreAuthorize("hasAuthority('requirement:assign-receiver')")
+    public ApiResponse<Requirement> assignReceiver(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return ApiResponse.ok(requirementService.assignReceiver(id, body.get("username")));
+    }
+
     @PutMapping("/{id}/document")
     @PreAuthorize("hasAnyAuthority('requirement:review','requirement:change')")
     public ApiResponse<Requirement> updateDocument(@PathVariable Long id, @RequestBody Map<String, Object> body) {
@@ -173,5 +179,11 @@ public class RequirementController {
     @GetMapping("/stats")
     public ApiResponse<Map<String, Object>> stats() {
         return ApiResponse.ok(requirementService.stats());
+    }
+
+    @GetMapping("/developer-workload")
+    public ApiResponse<Map<String, Object>> developerWorkload(@RequestParam String username,
+                                                               @RequestParam(defaultValue = "0") BigDecimal additionalHours) {
+        return ApiResponse.ok(requirementService.developerWorkload(username, additionalHours));
     }
 }

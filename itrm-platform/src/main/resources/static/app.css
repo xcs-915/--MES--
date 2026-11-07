@@ -1895,7 +1895,7 @@ input, select, textarea {
 .search-bar input {
   width: 100%;
   height: 34px;
-  padding: 0 12px 0 34px;
+  padding: 0 12px;
   border: 1px solid var(--it-color-border);
   border-radius: var(--it-radius-md);
   font-size: 13px;
@@ -1914,6 +1914,8 @@ input, select, textarea {
   top: 50%;
   transform: translateY(-50%);
   color: var(--it-color-text-quaternary);
+  width: 16px;
+  height: 16px;
 }
 
 /* ============================================================
@@ -3467,6 +3469,14 @@ body { min-width: 320px; }
 .notification-item p { margin:5px 0 10px; color:#64748b; font-size:12px; }
 .notification-type { width:34px; height:34px; border-radius:9px; display:grid; place-items:center; flex:0 0 auto; font-weight:700; }
 .notification-type.blue { color:#2563eb; background:#eff6ff; }.notification-type.green{color:#059669;background:#ecfdf5}
+
+.rich-editor-toolbar { display:flex; gap:6px; padding:7px 9px; border:1px solid var(--it-color-border); border-bottom:0; border-radius:8px 8px 0 0; background:#f8fafc; }
+.rich-editor-toolbar button { border:0; background:#fff; color:#475569; padding:5px 9px; border-radius:5px; cursor:pointer; box-shadow:0 0 0 1px #e2e8f0; }
+.rich-editor-toolbar button:hover { color:#2563eb; background:#eff6ff; }
+.rich-editor { min-height:100px; padding:12px; border:1px solid var(--it-color-border); border-radius:0 0 8px 8px; outline:none; line-height:1.7; background:#fff; }
+.rich-editor:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.1); }
+.rich-editor img, .document-rich-content img { display:block; max-width:100%; max-height:480px; margin:10px 0; border-radius:8px; border:1px solid #e2e8f0; }
+.document-rich-content p { margin:6px 0; }.document-rich-content ul,.document-rich-content ol { padding-left:22px; }
 
 /* Generic enterprise components */
 .card-caption { margin-top:3px; color:#94a3b8; font-size:11px; font-weight:400; }

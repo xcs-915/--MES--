@@ -3,6 +3,7 @@ package com.itrm.platform.security;
 import com.itrm.platform.common.BaseEntity;
 
 import javax.persistence.*;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "itrm_user")
@@ -28,6 +29,9 @@ public class ItrmUser extends BaseEntity {
     @Column(length = 200)
     private String email;
 
+    @Column(name = "workload_capacity_hours", precision = 10, scale = 2)
+    private BigDecimal workloadCapacityHours = new BigDecimal("160");
+
     public String getUsername() { return username; }
     public void setUsername(String v) { username = v; }
     public String getPassword() { return password; }
@@ -42,4 +46,6 @@ public class ItrmUser extends BaseEntity {
     public void setStatus(String v) { status = v; }
     public String getEmail() { return email; }
     public void setEmail(String v) { email = v; }
+    public BigDecimal getWorkloadCapacityHours() { return workloadCapacityHours; }
+    public void setWorkloadCapacityHours(BigDecimal value) { workloadCapacityHours = value; }
 }

@@ -49,7 +49,7 @@ const TYPE_OPTIONS = [
   { value: 'REPORT', label: '报表' },
   { value: 'OTHER', label: '其他' },
 ];
-const DEPT_OPTIONS = ['生产部', '质量部', '设备部', '仓储部', 'IT部', '采购部', '销售部', '财务部', '人事部'];
+let DEPT_OPTIONS = ['生产部', '质量部', '设备部', '仓储部', 'IT部', '采购部', '销售部', '财务部', '人事部'];
 const PAGE_SIZE = 20;
 
 // ==================== 本地 UI 渲染函数（使用 app.css 类名） ====================
@@ -106,6 +106,11 @@ export async function renderRequirements() {
       configured.forEach(s => { if (!STATUS_MAP[s.code]) STATUS_MAP[s.code] = { label: s.name, cls: 'badge-status-backlog' }; });
     }
   } catch { /* use built-in status catalogue */ }
+  try {
+    const departmentRes = await api('/departments', { silent: true });
+    const configuredDepartments = (departmentRes?.data || []).filter(item => item.status === 'ACTIVE');
+    if (configuredDepartments.length) DEPT_OPTIONS = configuredDepartments.map(item => item.fullPath);
+  } catch { /* use built-in department catalogue */ }
   const dashboardStatus = sessionStorage.getItem('itrm_dashboard_status');
   if (dashboardStatus) {
     currentFilters.statusList = [dashboardStatus];
@@ -140,7 +145,6 @@ export async function renderRequirements() {
       <div class="filter-bar">
         <div class="filter-row">
           <div class="search-bar">
-            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input type="text" id="f-keyword" placeholder="搜索需求标题、编号..." />
           </div>
           <select class="form-select" id="f-system" style="width:140px">
@@ -364,7 +368,7 @@ function renderListActions(item) {
   const id = item.id;
   switch (item.status) {
     case 'DRAFT': return actionButton('submit-req', id, '提交', true, 'requirement:submit') + actionButton('change-req', id, '变更', false, 'requirement:change');
-    case 'PENDING_RECEIVE': return actionButton('receive-req', id, '接收', true, 'requirement:receive') + actionButton('reject-req', id, '驳回', false, 'requirement:review');
+    case 'PENDING_RECEIVE': return actionButton('assign-receiver', id, '指派接收', false, 'requirement:assign-receiver') + actionButton('receive-req', id, '接收', true, 'requirement:receive') + actionButton('reject-req', id, '驳回', false, 'requirement:review');
     case 'PENDING_DOCUMENT': return actionButton('document-req', id, '完善文档', true, 'requirement:review') + actionButton('submit-approval-req', id, '提交审批', false, 'requirement:review') + actionButton('change-req', id, '变更', false, 'requirement:change');
     case 'PENDING_APPROVAL': return actionButton('approve-req', id, '审批', true, 'requirement:review');
     case 'APPROVED': return actionButton('plan-req', id, '排期分配', true, 'requirement:plan') + actionButton('change-req', id, '变更', false, 'requirement:change');
@@ -478,6 +482,7 @@ function bindPageEvents() {
         openReqDetail(id);
         break;
       case 'submit-req':
+      case 'assign-receiver':
       case 'receive-req':
       case 'reject-req':
       case 'document-req':
@@ -530,7 +535,8 @@ function handleListAction(action, id) {
   const refresh = () => loadRequirements(currentPage);
   if (action === 'submit-req') {
     if (confirm('确定提交需求到 IT 待接收队列？')) api(`/requirements/${id}/submit`, { method: 'POST' }).then(refresh).catch(e => alert(e.message));
-  } else if (action === 'receive-req') openReceiveDialog(id, listContext);
+  } else if (action === 'assign-receiver') openAssignReceiverDialog(id, listContext);
+  else if (action === 'receive-req') openReceiveDialog(id, listContext);
   else if (action === 'reject-req') openRejectDialog(id, listContext);
   else if (action === 'document-req') openDocumentDialog(id, listContext);
   else if (action === 'submit-approval-req') {
@@ -727,6 +733,9 @@ function toggleMoreMenu(btn, id) {
 function openReqForm(id) {
   const isEdit = !!id;
   const title = isEdit ? '编辑需求' : '新建需求';
+  const currentUser = state.user || {};
+  const currentDepartment = currentUser.department || '';
+  const currentProposer = currentUser.realName || currentUser.username || '';
 
   const bodyHtml = `
     <form>
@@ -759,15 +768,18 @@ function openReqForm(id) {
         </div>
         <div class="form-item">
           <label class="form-label">来源部门</label>
-          <select class="form-select" name="sourceDept">
-            <option value="">请选择</option>
-            ${DEPT_OPTIONS.map(d => `<option value="${d}">${d}</option>`).join('')}
-          </select>
+          <input class="form-input" name="sourceDept" value="${esc(currentDepartment)}" readonly placeholder="请联系管理员完善用户部门" />
+          <div class="form-hint">根据当前登录用户自动带出，提交时由系统校验</div>
         </div>
       </div>
       <div class="form-item">
         <label class="form-label">提出人</label>
-        <input type="text" class="form-input" name="proposer" placeholder="请输入提出人姓名" />
+        <input type="text" class="form-input" name="proposer" value="${esc(currentProposer)}" readonly />
+      </div>
+      <div class="form-item">
+        <label class="form-label required">期望完成时间</label>
+        <input type="date" class="form-input" name="expectedCompletionDate" required />
+        <div class="form-hint">由需求提出人填写，接收后信息部会另行评估预计完成时间</div>
       </div>
       <div class="form-item">
         <label class="form-label">当前问题</label>
@@ -802,7 +814,7 @@ function openReqForm(id) {
     const titleVal = form.title.value.trim();
     const systemVal = form.belongSystem.value;
     const categoryVal = form.category.value;
-    if (!titleVal || !systemVal || !categoryVal) {
+    if (!titleVal || !systemVal || !categoryVal || !form.expectedCompletionDate.value) {
       alert('请填写必填项');
       return Promise.reject(new Error('必填项未填写'));
     }
@@ -814,6 +826,7 @@ function openReqForm(id) {
       urgency: form.urgency.value || 'MEDIUM',
       sourceDept: form.sourceDept.value,
       proposer: form.proposer.value.trim(),
+      expectedCompletionDate: form.expectedCompletionDate.value,
       currentProblem: form.currentProblem.value.trim(),
       expectedEffect: form.expectedEffect.value.trim(),
       acceptanceCriteria: form.acceptanceCriteria.value.trim(),
@@ -902,13 +915,14 @@ async function openReqDetail(id) {
   drawer.querySelector('[data-back-requirements]').onclick = () => renderRequirements();
 
   try {
-    const [reqRes, approvalRes, changeRes, tasksRes, attachmentsRes, testsRes] = await Promise.all([
+    const [reqRes, approvalRes, changeRes, tasksRes, attachmentsRes, testsRes, timeLogsRes] = await Promise.all([
       api(`/requirements/${id}`),
       api(`/requirements/${id}/approval-records`).catch(() => ({ data: [] })),
       api(`/requirements/${id}/change-logs`).catch(() => ({ data: [] })),
       api(`/tasks/by-requirement/${id}`).catch(() => ({ data: [] })),
       api(`/requirements/${id}/attachments`).catch(() => ({ data: [] })),
       api(`/test-records/by-requirement/${id}`).catch(() => ({ data: [] })),
+      api(`/time-logs/by-requirement/${id}`).catch(() => ({ data: [] })),
     ]);
 
     const req = reqRes?.data || reqRes || {};
@@ -917,6 +931,7 @@ async function openReqDetail(id) {
     const tasks = tasksRes?.data || tasksRes || [];
     const attachments = attachmentsRes?.data || attachmentsRes || [];
     const tests = testsRes?.data || testsRes || [];
+    const timeLogs = timeLogsRes?.data || timeLogsRes || [];
 
     // 替换 drawer 标题为需求编号 + 标题
     body.innerHTML = `
@@ -939,6 +954,7 @@ async function openReqDetail(id) {
         <div class="tab-item active" data-tab="basic">需求概览</div>
         <div class="tab-item" data-tab="document">需求文档</div>
         <div class="tab-item" data-tab="tasks">开发任务 <span class="tab-count">${tasks.length}</span></div>
+        <div class="tab-item" data-tab="timelog">工时 <span class="tab-count">${timeLogs.length}</span></div>
         <div class="tab-item" data-tab="testing">测试与缺陷 <span class="tab-count">${tests.length}</span></div>
         <div class="tab-item" data-tab="approval">审批记录</div>
         <div class="tab-item" data-tab="change">变更记录</div>
@@ -955,6 +971,9 @@ async function openReqDetail(id) {
         </div>
         <div class="tab-panel" data-tab-panel="tasks" style="display:none">
           ${renderTasksTab(tasks, req)}
+        </div>
+        <div class="tab-panel" data-tab-panel="timelog" style="display:none">
+          ${renderTimeLogTab(timeLogs, tasks, req)}
         </div>
         <div class="tab-panel" data-tab-panel="testing" style="display:none">
           ${renderTestingTab(tests, tasks, req)}
@@ -987,9 +1006,11 @@ async function openReqDetail(id) {
     }
 
     bindTaskTabActions(req, drawer);
+    bindTimeLogTabActions(req, tasks, drawer);
     bindTestingTabActions(req, tasks, drawer);
     bindAttachmentActions(req, drawer);
     loadAttachmentPreviews(req.id, drawer);
+    loadDocumentImages(req.id, drawer);
   } catch (e) {
     body.innerHTML = emptyState(e.message || '加载失败');
   }
@@ -1007,15 +1028,15 @@ function renderBasicInfo(req) {
       <div class="detail-section-body">
         <div style="margin-bottom:20px">
           <div style="font-size:12px;color:var(--it-color-text-tertiary);margin-bottom:6px;font-weight:500">当前问题</div>
-          <div style="font-size:13px;color:var(--it-color-text-secondary);line-height:1.7;background:var(--it-color-bg-page);padding:12px;border-radius:var(--it-radius-md)">${esc(req.currentProblem) || '—'}</div>
+          <div class="document-rich-content" style="font-size:13px;color:var(--it-color-text-secondary);line-height:1.7;background:var(--it-color-bg-page);padding:12px;border-radius:var(--it-radius-md)">${req.currentProblem ? renderRichContent(req.currentProblem) : '—'}</div>
         </div>
         <div style="margin-bottom:20px">
           <div style="font-size:12px;color:var(--it-color-text-tertiary);margin-bottom:6px;font-weight:500">预期效果</div>
-          <div style="font-size:13px;color:var(--it-color-text-secondary);line-height:1.7;background:var(--it-color-bg-page);padding:12px;border-radius:var(--it-radius-md)">${esc(req.expectedEffect) || '—'}</div>
+          <div class="document-rich-content" style="font-size:13px;color:var(--it-color-text-secondary);line-height:1.7;background:var(--it-color-bg-page);padding:12px;border-radius:var(--it-radius-md)">${req.expectedEffect ? renderRichContent(req.expectedEffect) : '—'}</div>
         </div>
         <div>
           <div style="font-size:12px;color:var(--it-color-text-tertiary);margin-bottom:6px;font-weight:500">验收标准</div>
-          <div style="font-size:13px;color:var(--it-color-text-secondary);line-height:1.7;background:var(--it-color-bg-page);padding:12px;border-radius:var(--it-radius-md)">${esc(req.acceptanceCriteria) || '—'}</div>
+          <div class="document-rich-content" style="font-size:13px;color:var(--it-color-text-secondary);line-height:1.7;background:var(--it-color-bg-page);padding:12px;border-radius:var(--it-radius-md)">${req.acceptanceCriteria ? renderRichContent(req.acceptanceCriteria) : '—'}</div>
         </div>
       </div>
     </div>
@@ -1050,6 +1071,10 @@ function renderBasicInfo(req) {
           <div class="detail-field">
             <div class="detail-field-label">开发负责人</div>
             <div class="detail-field-value">${esc(req.devOwner) || '—'}</div>
+          </div>
+          <div class="detail-field">
+            <div class="detail-field-label">期望完成</div>
+            <div class="detail-field-value">${formatDate(req.expectedCompletionDate)}</div>
           </div>
           <div class="detail-field">
             <div class="detail-field-label">计划开始</div>
@@ -1091,8 +1116,33 @@ function renderRequirementDocument(req) {
   ];
   return `<div class="document-sheet">
     <div class="document-sheet-header"><div><span>${esc(req.reqNo || req.id)}</span><h3>${esc(req.title)}</h3></div><div class="document-meta">评审负责人：${esc(req.reviewOwner || '未指定')} · 预计完成：${formatDate(req.plannedEndDate)}</div></div>
-    ${sections.map(([title, value], index) => `<section><h4>${index + 1}. ${title}</h4><div>${value ? esc(value) : '<span class="document-empty">待完善</span>'}</div></section>`).join('')}
+    ${sections.map(([title, value], index) => `<section><h4>${index + 1}. ${title}</h4><div class="document-rich-content">${value ? renderRichContent(value) : '<span class="document-empty">待完善</span>'}</div></section>`).join('')}
   </div>`;
+}
+
+function renderRichContent(value) {
+  const source = String(value || '');
+  if (!/<[a-z][\s\S]*>/i.test(source)) return esc(source).replaceAll('\n', '<br>');
+  const template = document.createElement('template'); template.innerHTML = source;
+  const allowed = new Set(['P','BR','STRONG','B','EM','I','U','UL','OL','LI','BLOCKQUOTE','IMG','H3','H4']);
+  template.content.querySelectorAll('*').forEach(node => {
+    if (!allowed.has(node.tagName)) { node.replaceWith(document.createTextNode(node.textContent || '')); return; }
+    [...node.attributes].forEach(attribute => {
+      if (!(node.tagName === 'IMG' && ['data-doc-attachment','alt'].includes(attribute.name))) node.removeAttribute(attribute.name);
+    });
+    if (node.tagName === 'IMG' && !node.dataset.docAttachment) node.remove();
+  });
+  return template.innerHTML;
+}
+
+async function loadDocumentImages(requirementId, container) {
+  const images = [...container.querySelectorAll('img[data-doc-attachment]')];
+  await Promise.all(images.map(async image => {
+    try {
+      const blob = await apiBlob(`/requirements/${requirementId}/attachments/${image.dataset.docAttachment}/content`);
+      const url = URL.createObjectURL(blob); image.src = url; image.onload = () => URL.revokeObjectURL(url);
+    } catch { image.alt = '图片加载失败'; }
+  }));
 }
 
 // ==================== 详情 - 操作按钮 ====================
@@ -1105,14 +1155,22 @@ function renderDetailActionButtons(req) {
   switch (status) {
     case 'DRAFT':
       buttons.push(`<button class="btn btn-primary btn-sm" data-action="submit-req" data-permission="requirement:submit">提交需求</button>`);
-      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="edit-req" data-permission="requirement:edit">编辑</button>`);
+      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="change-req" data-permission="requirement:change">变更</button>`);
       buttons.push(`<button class="btn btn-ghost btn-sm" data-action="delete-req" data-permission="requirement:delete">删除</button>`);
       break;
     case 'PENDING_RECEIVE':
+      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="assign-receiver" data-permission="requirement:assign-receiver">指派接收</button>`);
       buttons.push(`<button class="btn btn-primary btn-sm" data-action="receive-req" data-permission="requirement:receive">接收需求</button>`);
       buttons.push(`<button class="btn btn-danger btn-sm" data-action="reject-req" data-permission="requirement:review">驳回</button>`);
       break;
-    case 'PENDING_PLAN':
+    case 'PENDING_DOCUMENT':
+      buttons.push(`<button class="btn btn-primary btn-sm" data-action="document-req" data-permission="requirement:review">完善需求文档</button>`);
+      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="submit-approval-req" data-permission="requirement:review">提交审批</button>`);
+      break;
+    case 'PENDING_APPROVAL':
+      buttons.push(`<button class="btn btn-primary btn-sm" data-action="approve-req" data-permission="requirement:review">审批</button>`);
+      break;
+    case 'APPROVED':
       buttons.push(`<button class="btn btn-primary btn-sm" data-action="plan-req" data-permission="requirement:plan">排期分配</button>`);
       break;
     case 'IN_DEVELOPMENT':
@@ -1131,7 +1189,7 @@ function renderDetailActionButtons(req) {
       buttons.push(`<button class="btn btn-secondary btn-sm" data-action="reopen-req">重新打开</button>`);
       break;
     case 'REJECTED':
-      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="edit-req">修改后重新提交</button>`);
+      buttons.push(`<button class="btn btn-secondary btn-sm" data-action="change-req" data-permission="requirement:change">变更后重新提交</button>`);
       break;
   }
 
@@ -1140,7 +1198,7 @@ function renderDetailActionButtons(req) {
 
 function bindDetailActions(req, drawer) {
   const id = req.id;
-  const actionsWrap = $q('#detail-actions', drawer.querySelector('.drawer-body'));
+  const actionsWrap = $q('#detail-actions', drawer.querySelector('.requirement-detail-body'));
   if (!actionsWrap) return;
 
   const actionMap = {
@@ -1159,8 +1217,19 @@ function bindDetailActions(req, drawer) {
           .catch(e => alert(e.message));
       }
     },
+    'assign-receiver': () => openAssignReceiverDialog(id, drawer),
     'receive-req': () => openReceiveDialog(id, drawer),
     'reject-req': () => openRejectDialog(id, drawer),
+    'document-req': () => openDocumentDialog(id, drawer),
+    'submit-approval-req': () => {
+      if (confirm('确定需求文档已完善，提交给上级审批？')) {
+        api(`/requirements/${id}/submit-approval`, { method: 'POST' })
+          .then(() => { drawer.remove(); loadRequirements(currentPage); })
+          .catch(e => alert(e.message));
+      }
+    },
+    'approve-req': () => openApprovalDialog(id, drawer),
+    'change-req': () => openChangeDialog(id, drawer),
     'plan-req': () => openPlanDialog(id, drawer),
     'start-testing-req': () => openStartTestingDialog(id, drawer),
     'update-progress-req': () => openUpdateProgressDialog(id, drawer),
@@ -1204,6 +1273,35 @@ function bindDetailActions(req, drawer) {
 }
 
 // ==================== 状态流转对话框 ====================
+
+function openAssignReceiverDialog(id, drawer) {
+  const bodyHtml = `<form>
+    <div class="form-item"><label class="form-label required">需求接收人</label>
+      <select class="form-select" name="receiver" required>
+        <option value="">接收人加载中...</option>
+        <option value="__custom__">第三方用户 / 其他账号</option>
+      </select>
+    </div>
+    <div class="form-item" data-custom-receiver hidden><label class="form-label required">用户账号</label>
+      <input class="form-input" name="customReceiver" placeholder="输入第三方用户账号" />
+      <div class="form-hint">第三方账号只会看到被指派的需求，并可接收需求和本人开发任务。</div>
+    </div>
+  </form>`;
+  const modal = openModal('指派需求接收人', bodyHtml, async overlay => {
+    const form = overlay.querySelector('form');
+    const username = form.receiver.value === '__custom__' ? form.customReceiver.value.trim() : form.receiver.value;
+    if (!username) { alert('请选择或输入接收人账号'); return Promise.reject(new Error('未填写接收人')); }
+    await api(`/requirements/${id}/assign-receiver`, { method: 'POST', body: { username } });
+    drawer.remove(); loadRequirements(currentPage);
+  }, '确认指派');
+  const select = modal.querySelector('[name="receiver"]');
+  const custom = modal.querySelector('[data-custom-receiver]');
+  select.addEventListener('change', () => { custom.hidden = select.value !== '__custom__'; });
+  api('/user-directory/receivers').then(result => {
+    const users = result?.data || [];
+    select.innerHTML = `<option value="">请选择接收人</option>${users.map(user => `<option value="${esc(user.username)}">${esc(user.realName || user.username)}（${esc(user.username)}）${user.role === 'THIRD_PARTY' ? ' · 第三方' : ''}</option>`).join('')}<option value="__custom__">手工输入其他账号</option>`;
+  }).catch(() => { select.innerHTML = `<option value="">接收人加载失败</option><option value="__custom__">手工输入账号</option>`; });
+}
 
 function openReceiveDialog(id, drawer) {
   const bodyHtml = `
@@ -1270,31 +1368,50 @@ function openRejectDialog(id, drawer) {
 }
 
 function openDocumentDialog(id, drawer) {
-  const bodyHtml = `<form>
-    <div class="form-item"><label class="form-label required">当前问题</label><textarea class="form-textarea" name="currentProblem" rows="3" required></textarea></div>
-    <div class="form-item"><label class="form-label required">预期效果</label><textarea class="form-textarea" name="expectedEffect" rows="3" required></textarea></div>
-    <div class="form-item"><label class="form-label required">验收标准</label><textarea class="form-textarea" name="acceptanceCriteria" rows="3" required></textarea></div>
-    <div class="form-item"><label class="form-label">可行性分析</label><textarea class="form-textarea" name="feasibility" rows="3"></textarea></div>
-    <div class="form-item"><label class="form-label required">本次完善说明</label><input class="form-input" name="reason" required placeholder="例：补充业务边界和验收口径" /></div>
-  </form>`;
+  const fields = [['description','需求说明',false],['currentProblem','当前问题',true],['expectedEffect','预期效果',true],['acceptanceCriteria','验收标准',true],['feasibility','可行性分析',false]];
+  const editor = (name, label, required) => `<div class="form-item rich-editor-field"><label class="form-label ${required ? 'required' : ''}">${label}</label><div class="rich-editor-toolbar" data-editor-toolbar="${name}"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="insertUnorderedList">列表</button><button type="button" data-cmd="insertOrderedList">编号</button><button type="button" data-cmd="image">插入图片</button></div><div class="rich-editor" contenteditable="true" data-rich-editor="${name}"></div></div>`;
+  const bodyHtml = `<form>${fields.map(field => editor(...field)).join('')}<input type="file" accept="image/*" data-document-image hidden /><div class="form-item"><label class="form-label required">本次完善说明</label><input class="form-input" name="reason" required placeholder="例：补充业务边界和验收口径" /></div></form>`;
   const modal = openModal('完善需求文档', bodyHtml, async overlay => {
     const form = overlay.querySelector('form');
-    if (!form.currentProblem.value.trim() || !form.expectedEffect.value.trim() || !form.acceptanceCriteria.value.trim() || !form.reason.value.trim()) {
+    const value = name => {
+      const clone = overlay.querySelector(`[data-rich-editor="${name}"]`).cloneNode(true);
+      clone.querySelectorAll('img[data-doc-attachment]').forEach(image => image.removeAttribute('src'));
+      return clone.innerHTML.trim();
+    };
+    const hasContent = name => {
+      const element = overlay.querySelector(`[data-rich-editor="${name}"]`);
+      return element.textContent.trim() || element.querySelector('img[data-doc-attachment]');
+    };
+    if (!hasContent('currentProblem') || !hasContent('expectedEffect') || !hasContent('acceptanceCriteria') || !form.reason.value.trim()) {
       alert('请完整填写当前问题、预期效果、验收标准和完善说明'); return Promise.reject(new Error('文档不完整'));
     }
     await api(`/requirements/${id}/document`, { method: 'PUT', body: {
-      currentProblem: form.currentProblem.value.trim(), expectedEffect: form.expectedEffect.value.trim(),
-      acceptanceCriteria: form.acceptanceCriteria.value.trim(), feasibility: form.feasibility.value.trim(), reason: form.reason.value.trim(),
+      description: value('description'), currentProblem: value('currentProblem'), expectedEffect: value('expectedEffect'),
+      acceptanceCriteria: value('acceptanceCriteria'), feasibility: value('feasibility'), reason: form.reason.value.trim(),
     }});
     drawer.remove(); loadRequirements(currentPage);
   }, '保存文档');
+  let activeEditor = null;
+  modal.querySelectorAll('[data-editor-toolbar] button').forEach(button => button.onclick = () => {
+    activeEditor = modal.querySelector(`[data-rich-editor="${button.parentElement.dataset.editorToolbar}"]`);
+    activeEditor.focus();
+    if (button.dataset.cmd === 'image') modal.querySelector('[data-document-image]').click();
+    else document.execCommand(button.dataset.cmd, false, null);
+  });
+  modal.querySelector('[data-document-image]').onchange = async event => {
+    const file = event.target.files?.[0]; if (!file || !activeEditor) return;
+    try {
+      const payload = new FormData(); payload.append('file', file);
+      const result = await api(`/requirements/${id}/attachments`, { method: 'POST', body: payload, timeout: 60000 });
+      const image = document.createElement('img'); image.dataset.docAttachment = result?.data?.id; image.alt = file.name;
+      image.src = URL.createObjectURL(file); activeEditor.append(image, document.createElement('br'));
+    } catch (error) { alert(error.message || '图片上传失败'); }
+    event.target.value = '';
+  };
   api(`/requirements/${id}`).then(result => {
     const data = result?.data || {};
-    const form = modal.querySelector('form');
-    form.currentProblem.value = data.currentProblem || '';
-    form.expectedEffect.value = data.expectedEffect || '';
-    form.acceptanceCriteria.value = data.acceptanceCriteria || '';
-    form.feasibility.value = data.feasibility || '';
+    fields.forEach(([name]) => { modal.querySelector(`[data-rich-editor="${name}"]`).innerHTML = data[name] ? renderRichContent(data[name]) : ''; });
+    loadDocumentImages(id, modal);
   });
 }
 
@@ -1345,7 +1462,8 @@ function openPlanDialog(id, drawer) {
     <form>
       <div class="form-item">
         <label class="form-label required">开发负责人</label>
-        <input type="text" class="form-input" name="devOwner" placeholder="请输入开发负责人姓名" required />
+        <select class="form-select" name="devOwner" required><option value="">开发人员加载中...</option></select>
+        <div class="form-hint" data-workload-hint>选择开发并填写预估工时后显示负载</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="form-item">
@@ -1376,6 +1494,12 @@ function openPlanDialog(id, drawer) {
       alert('请填写开发负责人');
       return Promise.reject(new Error('必填项未填写'));
     }
+    const incomingHours = parseFloat(form.estimatedHours.value) || 0;
+    const workloadResult = await api(`/requirements/developer-workload?username=${encodeURIComponent(devOwner)}&additionalHours=${incomingHours}`);
+    const workload = workloadResult?.data || {};
+    if (workload.overloaded && !window.confirm(`${workload.realName || devOwner} 分配后负载 ${workload.afterAssignmentHours}h，已超过上限 ${workload.capacityHours}h。仍要指派吗？`)) {
+      return Promise.reject(new Error('已取消超负载指派'));
+    }
     await api(`/requirements/${id}/plan`, {
       method: 'POST',
       body: {
@@ -1383,7 +1507,7 @@ function openPlanDialog(id, drawer) {
         plannedStartDate: form.plannedStartDate.value || null,
         plannedEndDate: form.plannedEndDate.value || null,
         devPlannedEnd: form.devPlannedEnd.value || null,
-        estimatedHours: parseFloat(form.estimatedHours.value) || 0,
+        estimatedHours: incomingHours,
       },
     });
     drawer.remove();
@@ -1396,6 +1520,23 @@ function openPlanDialog(id, drawer) {
     form.devPlannedEnd.value = data.devPlannedEnd || data.plannedEndDate || '';
     form.estimatedHours.value = data.estimatedHours || '';
   });
+  api('/user-directory/developers').then(result => {
+    const users = result?.data || [];
+    const select = modal.querySelector('select[name="devOwner"]');
+    select.innerHTML = `<option value="">请选择开发负责人</option>${users.map(user => `<option value="${esc(user.username)}">${esc(user.realName || user.username)}（${esc(user.username)}）${user.role === 'THIRD_PARTY' ? ' · 第三方' : ''}</option>`).join('')}`;
+  }).catch(() => { modal.querySelector('select[name="devOwner"]').innerHTML = `<option value="">开发人员加载失败</option>`; });
+  const refreshWorkload = async () => {
+    const form = modal.querySelector('form'); const hint = modal.querySelector('[data-workload-hint]');
+    if (!form.devOwner.value) return;
+    try {
+      const result = await api(`/requirements/developer-workload?username=${encodeURIComponent(form.devOwner.value)}&additionalHours=${Number(form.estimatedHours.value || 0)}`, { silent: true });
+      const value = result?.data || {};
+      hint.textContent = `当前 ${value.usedHours || 0}h / 上限 ${value.capacityHours || 160}h，分配后 ${value.afterAssignmentHours || 0}h${value.overloaded ? '（超出上限）' : ''}`;
+      hint.style.color = value.overloaded ? '#dc2626' : '#059669';
+    } catch { hint.textContent = '负载读取失败'; }
+  };
+  modal.querySelector('select[name="devOwner"]').onchange = refreshWorkload;
+  modal.querySelector('input[name="estimatedHours"]').oninput = refreshWorkload;
 }
 
 function openStartTestingDialog(id, drawer) {
@@ -1515,6 +1656,25 @@ function renderTestingTab(records, tasks, req) {
   ${records.length ? `<table class="data-table"><thead><tr><th>类型</th><th>标题</th><th>严重程度</th><th>状态</th><th>测试人</th><th>处理人</th><th>记录时间</th></tr></thead><tbody>${records.map(record => `<tr class="clickable-row" data-action="view-test-record" data-id="${esc(record.id)}"><td><span class="tag">${record.type === 'BUG' ? '缺陷' : '测试'}</span></td><td><strong>${esc(record.title)}</strong></td><td>${severityLabels[record.severity] || esc(record.severity)}</td><td>${statusLabels[record.status] || esc(record.status)}</td><td>${esc(record.tester || '—')}</td><td>${esc(record.handler || '—')}</td><td>${formatDateTime(record.createdAt)}</td></tr>`).join('')}</tbody></table>` : `<div class="empty-state"><div class="empty-state-title">暂无测试或缺陷记录</div><div class="empty-state-desc">点击上方按钮记录测试结果</div></div>`}`;
 }
 
+function renderTimeLogTab(logs, tasks, req) {
+  const typeLabels = { DEV: '开发', TEST: '测试', REVIEW: '评审', DOC: '文档', MEETING: '会议', OTHER: '其他' };
+  const total = logs.reduce((sum, item) => sum + Number(item.hours || 0), 0);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div><div style="font-size:13px;font-weight:600">需求工时</div><div style="font-size:12px;color:var(--it-color-text-tertiary);margin-top:3px">工时必须登记到开发任务，当前合计 ${total.toFixed(1)} 小时</div></div>${tasks.length ? `<button class="btn btn-primary btn-sm" data-action="add-time-log" data-permission="timelog:create">+ 登记工时</button>` : ''}</div>
+  ${logs.length ? `<table class="data-table"><thead><tr><th>日期</th><th>人员</th><th>类型</th><th>工时</th><th>说明</th></tr></thead><tbody>${logs.map(item => `<tr><td>${formatDate(item.workDate)}</td><td>${esc(item.worker || '—')}</td><td>${typeLabels[item.workType] || esc(item.workType)}</td><td><strong>${Number(item.hours || 0).toFixed(1)}h</strong></td><td>${esc(item.description || '—')}</td></tr>`).join('')}</tbody></table>` : `<div class="empty-state"><div class="empty-state-title">暂无工时记录</div><div class="empty-state-desc">先拆分开发任务，再在需求内登记工时</div></div>`}`;
+}
+
+function bindTimeLogTabActions(req, tasks, container) {
+  container.querySelector('[data-action="add-time-log"]')?.addEventListener('click', () => {
+    const body = `<form><div class="form-item"><label class="form-label required">关联任务</label><select class="form-select" name="taskId" required><option value="">请选择</option>${tasks.map(task => `<option value="${esc(task.id)}">${esc(task.taskNo)} · ${esc(task.title)}</option>`).join('')}</select></div><div class="form-grid"><div class="form-item"><label class="form-label required">工作日期</label><input type="date" class="form-input" name="workDate" value="${new Date().toISOString().slice(0, 10)}" required /></div><div class="form-item"><label class="form-label required">工时</label><input type="number" class="form-input" name="hours" min="0.5" step="0.5" required /></div></div><div class="form-item"><label class="form-label">工作类型</label><select class="form-select" name="workType"><option value="DEV">开发</option><option value="TEST">测试</option><option value="REVIEW">评审</option><option value="DOC">文档</option><option value="MEETING">会议</option><option value="OTHER">其他</option></select></div><div class="form-item"><label class="form-label">工作说明</label><textarea class="form-textarea" name="description" rows="3"></textarea></div></form>`;
+    openModal('登记需求工时', body, async overlay => {
+      const form = overlay.querySelector('form');
+      if (!form.taskId.value || !form.hours.value) return Promise.reject(new Error('请选择任务并填写工时'));
+      await api('/time-logs', { method: 'POST', body: { taskId: Number(form.taskId.value), worker: state.user?.username, workDate: form.workDate.value, hours: Number(form.hours.value), workType: form.workType.value, description: form.description.value.trim() } });
+      container.remove(); openReqDetail(req.id);
+    }, '保存工时');
+  });
+}
+
 function bindTestingTabActions(req, tasks, container) {
   const body = container.querySelector('.requirement-detail-body');
   body.querySelector('[data-action="add-test-record"]')?.addEventListener('click', () => openAddTestRecordDialog(req, tasks, container));
@@ -1536,7 +1696,8 @@ function openAddTestRecordDialog(req, tasks, container) {
 }
 
 function bindTaskTabActions(req, drawer) {
-  const body = drawer.querySelector('.drawer-body');
+  const body = drawer.querySelector('.requirement-detail-body');
+  if (!body) return;
   const addBtn = body.querySelector('[data-action="add-task"]');
   if (addBtn) addBtn.onclick = () => openAddTaskDialog(req.id, drawer);
 }
@@ -1551,7 +1712,7 @@ function openAddTaskDialog(reqId, drawer) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="form-item">
           <label class="form-label">负责人</label>
-          <input type="text" class="form-input" name="assignee" placeholder="请输入负责人" />
+          <select class="form-select" name="assignee"><option value="">开发人员加载中...</option></select>
         </div>
         <div class="form-item">
           <label class="form-label">紧急程度</label>
@@ -1576,7 +1737,7 @@ function openAddTaskDialog(reqId, drawer) {
       </div>
     </form>
   `;
-  openModal('新增任务', bodyHtml, async (overlay) => {
+  const modal = openModal('新增任务', bodyHtml, async (overlay) => {
     const form = overlay.querySelector('form');
     const title = form.title.value.trim();
     if (!title) {
@@ -1599,6 +1760,10 @@ function openAddTaskDialog(reqId, drawer) {
     openReqDetail(reqId);
     loadRequirements(currentPage);
   }, '创建');
+  api('/user-directory/developers').then(result => {
+    const users = result?.data || [];
+    modal.querySelector('select[name="assignee"]').innerHTML = `<option value="">请选择负责人</option>${users.map(user => `<option value="${esc(user.username)}">${esc(user.realName || user.username)}（${esc(user.username)}）${user.role === 'THIRD_PARTY' ? ' · 第三方' : ''}</option>`).join('')}`;
+  }).catch(() => { modal.querySelector('select[name="assignee"]').innerHTML = `<option value="">负责人加载失败</option>`; });
 }
 
 // ==================== 审批记录 Tab ====================
@@ -1715,7 +1880,8 @@ async function uploadRequirementFiles(requirementId, files) {
 }
 
 function bindAttachmentActions(req, drawer) {
-  const body = drawer.querySelector('.drawer-body');
+  const body = drawer.querySelector('.requirement-detail-body');
+  if (!body) return;
   const input = body.querySelector('[data-attachment-input]');
   const uploadButton = body.querySelector('[data-action="upload-attachment"]');
   if (uploadButton && input) {

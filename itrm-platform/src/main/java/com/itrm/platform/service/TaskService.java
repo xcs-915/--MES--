@@ -6,6 +6,9 @@ import com.itrm.platform.domain.Task;
 import com.itrm.platform.repo.RequirementRepository;
 import com.itrm.platform.repo.TaskRepository;
 import com.itrm.platform.repo.TimeLogRepository;
+import com.itrm.platform.security.ItrmUser;
+import com.itrm.platform.security.ItrmUserRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,26 +25,35 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final RequirementRepository requirementRepository;
     private final TimeLogRepository timeLogRepository;
+    private final ItrmUserRepository userRepository;
     private static final Set<String> TASK_READY_STATUSES = new HashSet<>(Arrays.asList(
             "IN_DEVELOPMENT", "IN_TESTING", "PENDING_RELEASE"
     ));
 
     public TaskService(TaskRepository taskRepository, RequirementRepository requirementRepository,
-                       TimeLogRepository timeLogRepository) {
+                       TimeLogRepository timeLogRepository, ItrmUserRepository userRepository) {
         this.taskRepository = taskRepository;
         this.requirementRepository = requirementRepository;
         this.timeLogRepository = timeLogRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
     public List<Task> listByRequirement(Long requirementId) {
-        return taskRepository.findByRequirementIdOrderBySortOrderAsc(requirementId);
+        List<Task> tasks = taskRepository.findByRequirementIdOrderBySortOrderAsc(requirementId);
+        ItrmUser current = currentUser();
+        if (current != null && "THIRD_PARTY".equals(current.getRole()))
+            tasks.removeIf(task -> !current.getUsername().equals(task.getAssignee()));
+        return tasks;
     }
 
     @Transactional(readOnly = true)
     public Task get(Long id) {
-        return taskRepository.findById(id)
-                .orElseThrow(() -> new BizException(404, "任务不存在"));
+        Task task = taskRepository.findById(id).orElseThrow(() -> new BizException(404, "任务不存在"));
+        ItrmUser current = currentUser();
+        if (current != null && "THIRD_PARTY".equals(current.getRole()) && !current.getUsername().equals(task.getAssignee()))
+            throw new BizException(403, "第三方用户只能查看分配给自己的开发任务");
+        return task;
     }
 
     @Transactional
@@ -180,6 +192,16 @@ public class TaskService {
     }
 
     @Transactional
+    public Task accept(Long id) {
+        Task task = taskRepository.findById(id).orElseThrow(() -> new BizException(404, "任务不存在"));
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (!username.equals(task.getAssignee())) throw new BizException(403, "只能接收分配给自己的开发任务");
+        if (!"TODO".equals(task.getStatus())) throw new BizException(400, "只有待办任务可以接收");
+        task.setStatus("IN_PROGRESS"); task.setStartDate(LocalDate.now());
+        return taskRepository.save(task);
+    }
+
+    @Transactional
     public Task updateProgress(Long id, Integer progress) {
         if (progress == null || progress < 0 || progress > 100) {
             throw new BizException(400, "进度值必须在0-100之间");
@@ -233,5 +255,10 @@ public class TaskService {
         }
 
         return taskRepository.save(task);
+    }
+
+    private ItrmUser currentUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByUsername(username).orElse(null);
     }
 }

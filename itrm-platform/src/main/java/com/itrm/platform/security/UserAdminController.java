@@ -17,13 +17,18 @@ import java.util.stream.Collectors;
 public class UserAdminController {
     private final ItrmUserRepository userRepository;
     private final ItrmRoleRepository roleRepository;
+    private final ItrmDepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserImportService userImportService;
 
     public UserAdminController(ItrmUserRepository userRepository, ItrmRoleRepository roleRepository,
-                               PasswordEncoder passwordEncoder) {
+                               ItrmDepartmentRepository departmentRepository,
+                               PasswordEncoder passwordEncoder, UserImportService userImportService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
+        this.departmentRepository = departmentRepository;
         this.passwordEncoder = passwordEncoder;
+        this.userImportService = userImportService;
     }
 
     @GetMapping
@@ -53,6 +58,12 @@ public class UserAdminController {
         apply(user, body);
         user.setStatus("ACTIVE");
         return ApiResponse.ok(toView(userRepository.save(user)));
+    }
+
+    @PostMapping("/import")
+    @PreAuthorize("hasAuthority('user:create')")
+    public ApiResponse<Map<String, Object>> importUsers(@RequestBody Map<String, Object> body) {
+        return ApiResponse.ok(userImportService.importUsers(body));
     }
 
     @PutMapping("/{id}")
@@ -101,8 +112,18 @@ public class UserAdminController {
     private void apply(ItrmUser user, Map<String, Object> body) {
         if (body.containsKey("realName")) user.setRealName(text(body, "realName"));
         if (body.containsKey("role")) user.setRole(text(body, "role"));
-        if (body.containsKey("department")) user.setDepartment(text(body, "department"));
+        if (body.containsKey("department")) {
+            String department = DepartmentAdminController.normalizePath(text(body, "department"));
+            if (!department.isEmpty() && !departmentRepository.existsByFullPath(department)) {
+                throw new BizException(400, "部门不存在，请先新增部门");
+            }
+            user.setDepartment(department);
+        }
         if (body.containsKey("email")) user.setEmail(text(body, "email"));
+        if (body.containsKey("workloadCapacityHours")) {
+            try { user.setWorkloadCapacityHours(new java.math.BigDecimal(text(body, "workloadCapacityHours"))); }
+            catch (Exception e) { throw new BizException(400, "负载上限格式无效"); }
+        }
     }
 
     private Map<String, Object> toView(ItrmUser user) {
@@ -113,6 +134,7 @@ public class UserAdminController {
         row.put("role", user.getRole());
         row.put("department", user.getDepartment());
         row.put("email", user.getEmail());
+        row.put("workloadCapacityHours", user.getWorkloadCapacityHours());
         row.put("status", user.getStatus());
         row.put("createdAt", user.getCreatedAt());
         return row;

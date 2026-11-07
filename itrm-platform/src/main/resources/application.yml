@@ -41,3 +41,7 @@ app:
   default-admin:
     username: admin
     password: admin123
+
+integration:
+  wecom:
+    webhook: ${WECOM_WEBHOOK_URL:}

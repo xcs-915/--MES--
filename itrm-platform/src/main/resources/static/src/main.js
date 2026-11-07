@@ -7,7 +7,6 @@ import { renderRequirements } from './views/requirements.js';
 import { renderTasks } from './views/tasks.js';
 import { renderBoard } from './views/board.js';
 import { renderTesting } from './views/testing.js';
-import { renderTimelog } from './views/timelog.js';
 import { renderSchedule } from './views/schedule.js';
 import { renderReports } from './views/reports.js';
 import { renderWorkflows } from './views/workflows.js';
@@ -23,7 +22,6 @@ const views = {
   tasks: { title: '开发任务', permission: 'task:view', render: renderTasks },
   schedule: { title: '排期与负载', permission: 'schedule:view', render: renderSchedule },
   testing: { title: '测试与缺陷', permission: 'test:view', render: renderTesting },
-  timelog: { title: '工时管理', permission: 'timelog:view', render: renderTimelog },
   reports: { title: '统计分析', permission: 'report:view', render: renderReports },
   workflows: { title: '审批流', permission: 'workflow:view', render: renderWorkflows },
   users: { title: '用户管理', permission: 'user:view', render: renderUsers },
@@ -33,6 +31,7 @@ const views = {
 const roleLabels = {
   ADMIN: '系统管理员', BUSINESS_USER: '业务需求人', IT_REVIEWER: '需求评审人',
   IT_PLANNER: '项目经理', DEVELOPER: '开发人员', TESTER: '测试人员', RELEASE_ENGINEER: '发布工程师',
+  THIRD_PARTY: '第三方协作用户', IT_APPROVER: '需求审批人', IT_APPROVER_DEVELOPER: '需求审批与开发',
 };
 
 function roleLabel(role) { return roleLabels[role] || role || '普通用户'; }
@@ -56,6 +55,7 @@ async function showApp() {
   const first = $$('.nav-link:not(.hidden)')[0]?.dataset.view || 'dashboard';
   await renderView(first);
   updatePendingBadge();
+  updateNotificationBadge();
 }
 
 function applyIdentity() {
@@ -161,14 +161,29 @@ function openGlobalSearch() {
   setTimeout(() => input.focus(), 50);
 }
 
-function openNotifications() {
-  UI.showDrawer({ title: '消息与待办', width: '420px', content: `
-    <div class="notification-list">
-      <div class="notification-item unread"><span class="notification-type blue">审</span><div><strong>需求评审待办</strong><p>待接收与待评审的需求会显示在需求池。</p><button class="btn btn-secondary btn-sm" data-go="requirements">查看需求池</button></div></div>
-      <div class="notification-item"><span class="notification-type green">报</span><div><strong>数据已实时汇总</strong><p>可在统计分析中查看交付趋势、工时与质量指标。</p><button class="btn btn-secondary btn-sm" data-go="reports">打开统计</button></div></div>
-    </div>` });
-  document.querySelectorAll('[data-go]').forEach(btn => btn.onclick = () => { UI.closeDrawer(); renderView(btn.dataset.go); });
+async function updateNotificationBadge() {
+  try {
+    const result = await api('/notifications/unread-count', { silent: true });
+    const count = Number(result?.data?.count || 0);
+    $('#notification-btn')?.setAttribute('title', count ? `${count} 条未读消息` : '通知');
+    $('#notification-btn')?.querySelector('.notification-dot')?.classList.toggle('hidden', count === 0);
+  } catch { $('#notification-btn')?.querySelector('.notification-dot')?.classList.add('hidden'); }
 }
+
+async function openNotifications() {
+  const drawer = UI.showDrawer({ title: '消息与待办', width: '440px', content: '<div class="loading-state"><span class="spinner"></span><span>加载消息...</span></div>' });
+  const body = drawer.querySelector('.drawer-body');
+  try {
+    const result = await api('/notifications'); const items = result?.data || [];
+    body.innerHTML = items.length ? `<div class="notification-list">${items.map(item => `<div class="notification-item ${item.readFlag ? '' : 'unread'}"><span class="notification-type ${item.readFlag ? 'green' : 'blue'}">${item.eventType?.includes('APPROVAL') ? '审' : '需'}</span><div><strong>${esc(item.title)}</strong><p>${esc(item.content || '')}</p><small>${formatNotificationTime(item.createdAt)}</small>${item.requirementId ? `<button class="btn btn-secondary btn-sm" data-notification-id="${item.id}" data-requirement-id="${item.requirementId}">查看需求</button>` : ''}</div></div>`).join('')}</div>` : UI.emptyState('♢', '暂无消息');
+    body.querySelectorAll('[data-requirement-id]').forEach(button => button.onclick = async () => {
+      await api(`/notifications/${button.dataset.notificationId}/read`, { method: 'PUT', body: {} });
+      sessionStorage.setItem('itrm_current_req_id', button.dataset.requirementId); UI.closeDrawer(); await renderView('requirements'); updateNotificationBadge();
+    });
+  } catch (error) { body.innerHTML = UI.emptyState('!', esc(error.message)); }
+}
+
+function formatNotificationTime(value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : ''; }
 
 function quickCreate() {
   renderView('requirements').then(() => setTimeout(() => document.querySelector('[data-action="new-req"]')?.click(), 50));

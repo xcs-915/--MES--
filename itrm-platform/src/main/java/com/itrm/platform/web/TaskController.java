@@ -78,6 +78,12 @@ public class TaskController {
         return ApiResponse.ok(taskService.updateAssignee(id, assignee));
     }
 
+    @PutMapping("/{id}/accept")
+    @PreAuthorize("hasAuthority('task:accept')")
+    public ApiResponse<Task> accept(@PathVariable Long id) {
+        return ApiResponse.ok(taskService.accept(id));
+    }
+
     @PutMapping("/{id}/progress")
     @PreAuthorize("hasAuthority('task:transition')")
     public ApiResponse<Task> updateProgress(@PathVariable Long id, @RequestBody Map<String, Integer> body) {

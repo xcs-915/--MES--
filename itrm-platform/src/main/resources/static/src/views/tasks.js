@@ -94,6 +94,12 @@ function bindEvents() {
       document.querySelector('[data-view="requirements"]')?.click();
     } else if (action === 'edit-task') {
       openTaskForm(id);
+    } else if (action === 'accept-task') {
+      if (confirm('确认接收这项开发任务并开始处理？')) {
+        api(`/tasks/${id}/accept`, { method: 'PUT' })
+          .then(() => loadTasks(currentPage))
+          .catch(error => alert(error.message));
+      }
     } else if (action === 'delete-task') {
       if (confirm('确定要删除这条任务吗？')) deleteTask(id);
     } else if (action === 'view-task-requirement') {
@@ -194,6 +200,7 @@ function renderTaskTable(items) {
           <td><div style="display:flex;align-items:center;min-width:80px">${progressBar(item.progress || 0)}</div></td>
           <td>${formatDate(item.dueDate)}</td>
           <td class="actions">
+            ${item.status === 'TODO' && item.assignee === state.user?.username ? `<button class="btn-link" data-action="accept-task" data-id="${esc(item.id)}" data-permission="task:accept">接收开发</button>` : ''}
             <button class="btn-link" data-action="edit-task" data-id="${esc(item.id)}" data-permission="task:edit">编辑</button>
             <button class="btn-link danger" data-action="delete-task" data-id="${esc(item.id)}" data-permission="task:delete">删除</button>
           </td>

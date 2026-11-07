@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface RequirementRepository extends JpaRepository<Requirement, Long>, JpaSpecificationExecutor<Requirement> {
 
@@ -17,6 +18,7 @@ public interface RequirementRepository extends JpaRepository<Requirement, Long>,
     List<Requirement> findByDevOwner(String devOwner);
 
     List<Requirement> findBySourceDept(String sourceDept);
+    Optional<Requirement> findByImportSourceAndExternalRef(String importSource, String externalRef);
 
     List<Requirement> findByReviewOwner(String reviewOwner);
 

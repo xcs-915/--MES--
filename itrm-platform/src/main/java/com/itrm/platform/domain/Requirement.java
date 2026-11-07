@@ -26,7 +26,7 @@ public class Requirement extends BaseEntity {
     @Column(name = "belong_system", length = 30)
     private String belongSystem;
 
-    @Column(name = "source_dept", length = 64)
+    @Column(name = "source_dept", length = 200)
     private String sourceDept;
 
     @Column(name = "proposer", length = 64)
@@ -49,6 +49,9 @@ public class Requirement extends BaseEntity {
 
     @Column(name = "review_owner", length = 64)
     private String reviewOwner;
+
+    @Column(name = "receiver", length = 64)
+    private String receiver;
 
     @Column(name = "dev_owner", length = 64)
     private String devOwner;
@@ -82,6 +85,9 @@ public class Requirement extends BaseEntity {
 
     @Column(name = "planned_start_date")
     private LocalDate plannedStartDate;
+
+    @Column(name = "expected_completion_date")
+    private LocalDate expectedCompletionDate;
 
     @Column(name = "planned_end_date")
     private LocalDate plannedEndDate;
@@ -131,6 +137,15 @@ public class Requirement extends BaseEntity {
     @Column(name = "reviewed_at")
     private Instant reviewedAt;
 
+    @Column(name = "import_source", length = 100)
+    private String importSource;
+
+    @Column(name = "external_ref", length = 100)
+    private String externalRef;
+
+    @Column(name = "legacy_status", length = 100)
+    private String legacyStatus;
+
     // --- Getters and Setters ---
 
     public String getReqNo() { return reqNo; }
@@ -171,6 +186,8 @@ public class Requirement extends BaseEntity {
 
     public String getReviewOwner() { return reviewOwner; }
     public void setReviewOwner(String reviewOwner) { this.reviewOwner = reviewOwner; }
+    public String getReceiver() { return receiver; }
+    public void setReceiver(String receiver) { this.receiver = receiver; }
 
     public String getDevOwner() { return devOwner; }
     public void setDevOwner(String devOwner) { this.devOwner = devOwner; }
@@ -204,6 +221,8 @@ public class Requirement extends BaseEntity {
 
     public LocalDate getPlannedStartDate() { return plannedStartDate; }
     public void setPlannedStartDate(LocalDate plannedStartDate) { this.plannedStartDate = plannedStartDate; }
+    public LocalDate getExpectedCompletionDate() { return expectedCompletionDate; }
+    public void setExpectedCompletionDate(LocalDate expectedCompletionDate) { this.expectedCompletionDate = expectedCompletionDate; }
 
     public LocalDate getPlannedEndDate() { return plannedEndDate; }
     public void setPlannedEndDate(LocalDate plannedEndDate) { this.plannedEndDate = plannedEndDate; }
@@ -252,4 +271,10 @@ public class Requirement extends BaseEntity {
 
     public Instant getReviewedAt() { return reviewedAt; }
     public void setReviewedAt(Instant reviewedAt) { this.reviewedAt = reviewedAt; }
+    public String getImportSource() { return importSource; }
+    public void setImportSource(String importSource) { this.importSource = importSource; }
+    public String getExternalRef() { return externalRef; }
+    public void setExternalRef(String externalRef) { this.externalRef = externalRef; }
+    public String getLegacyStatus() { return legacyStatus; }
+    public void setLegacyStatus(String legacyStatus) { this.legacyStatus = legacyStatus; }
 }
